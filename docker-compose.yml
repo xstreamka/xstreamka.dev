@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-payservice}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME:-payservice}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-payservice}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pay:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${LISTEN_PORT:-8090}:8090"
+    environment:
+      LISTEN_ADDR: ":8090"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-payservice}
+      DB_PASS: ${DB_PASS}
+      DB_NAME: ${DB_NAME:-payservice}
+      ROBOKASSA_LOGIN: ${ROBOKASSA_LOGIN}
+      ROBOKASSA_PASS1: ${ROBOKASSA_PASS1}
+      ROBOKASSA_PASS2: ${ROBOKASSA_PASS2}
+      ROBOKASSA_TEST_MODE: ${ROBOKASSA_TEST_MODE:-true}
+      ROBOKASSA_HASH_ALGO: ${ROBOKASSA_HASH_ALGO:-md5}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      SITE_URL: ${SITE_URL:-https://xstreamka.dev}
+
+volumes:
+  pgdata:

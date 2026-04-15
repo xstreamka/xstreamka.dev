@@ -1,0 +1,121 @@
+package main
+
+import (
+	"fmt"
+	"html/template"
+	"log"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"pay-service/internal/config"
+	"pay-service/internal/database"
+	"pay-service/internal/handlers"
+	"pay-service/internal/models"
+	"pay-service/internal/payment"
+)
+
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Config: %v", err)
+	}
+
+	db, err := database.Connect(cfg.DSN())
+	if err != nil {
+		log.Fatalf("Database: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Migrate(); err != nil {
+		log.Fatalf("Migration: %v", err)
+	}
+
+	paymentStore := models.NewPaymentStore(db.Pool)
+
+	robokassa := payment.NewRobokassa(payment.RobokassaConfig{
+		MerchantLogin: cfg.RobokassaLogin,
+		Password1:     cfg.RobokassaPass1,
+		Password2:     cfg.RobokassaPass2,
+		IsTest:        cfg.RobokassaTest,
+		HashAlgo:      payment.HashAlgo(cfg.RobokassaAlgo),
+	})
+
+	webhookSender := payment.NewWebhookSender(cfg.WebhookSecret)
+
+	tmpl, err := template.ParseGlob("internal/templates/pay/*.html")
+	if err != nil {
+		log.Fatalf("Templates: %v", err)
+	}
+
+	h := handlers.NewPaymentHandler(paymentStore, robokassa, webhookSender, cfg.WebhookSecret, cfg.SiteURL, tmpl)
+
+	mux := http.NewServeMux()
+
+	// Checkout — принимает подписанные параметры, создаёт платёж, редирект
+	mux.HandleFunc("GET /pay/checkout", h.Checkout)
+
+	// Страница оплаты — чистый URL, безопасен для F5
+	mux.HandleFunc("GET /pay/order/{id}", h.OrderPage)
+
+	// Тестовая страница — генерирует подписанную ссылку (убрать в продакшене)
+	mux.HandleFunc("GET /pay/demo", func(w http.ResponseWriter, r *http.Request) {
+		params := map[string]string{
+			"product_type": "vpn",
+			"plan_id":      "basic_30",
+			"amount":       "150.00",
+			"description":  "VPN Basic 30 days 50GB",
+			"user_ref":     "1",
+			"email":        "test@xstreamka.dev",
+			"callback_url": "",
+			"return_url":   cfg.SiteURL,
+			"metadata":     `{"traffic_gb":50,"duration_days":30}`,
+			"ts":           fmt.Sprintf("%d", time.Now().Unix()),
+		}
+		sig := handlers.SignRedirectParams(params, cfg.WebhookSecret)
+
+		q := make(url.Values)
+		for k, v := range params {
+			q.Set(k, v)
+		}
+		q.Set("sig", sig)
+
+		checkoutURL := cfg.SiteURL + "/pay/checkout?" + q.Encode()
+		http.Redirect(w, r, checkoutURL, http.StatusSeeOther)
+	})
+
+	// Робокасса callbacks
+	mux.HandleFunc("POST /payments/result", h.ResultURL)
+	mux.HandleFunc("GET /payments/result", h.ResultURL)
+	mux.HandleFunc("GET /payments/success", h.SuccessURL)
+	mux.HandleFunc("GET /payments/fail", h.FailURL)
+
+	// Лендинг — статика из папки static/ (index.html, favicon.svg, оферта)
+	fs := http.FileServer(http.Dir("static"))
+	mux.Handle("/", fs)
+
+	srv := &http.Server{Addr: cfg.ListenAddr, Handler: logMiddleware(mux)}
+
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		<-sigCh
+		log.Println("Shutting down...")
+		srv.Close()
+	}()
+
+	log.Printf("Pay service started on %s", cfg.ListenAddr)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Server: %v", err)
+	}
+}
+
+func logMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("%s %s %s", r.Method, r.URL.Path, r.RemoteAddr)
+		next.ServeHTTP(w, r)
+	})
+}

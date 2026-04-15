@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оплата не прошла — XStreamka Dev</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .card { background: #1e293b; border-radius: 12px; padding: 2rem; max-width: 420px; width: 100%; margin: 1rem; text-align: center; }
+        h2 { margin-bottom: 0.5rem; }
+        p { color: #94a3b8; margin-bottom: 1rem; }
+        .icon { font-size: 3rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">❌</div>
+        <h2>Оплата не прошла</h2>
+        {{if .InvID}}<p>Счёт #{{.InvID}}</p>{{end}}
+        <p>Платёж был отменён или произошла ошибка.</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XStreamka Dev — Веб-разработка и программирование</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #06080d; --bg-primary: #0a0f1a; --bg-card: #0f1624;
+            --bg-card-hover: #141d30; --bg-accent: #1a2540; --border: #1e2a45;
+            --text-primary: #e8ecf4; --text-secondary: #7b8ba8; --text-muted: #4a5a78;
+            --accent-blue: #3b82f6; --accent-cyan: #22d3ee; --accent-green: #10b981;
+            --accent-amber: #f59e0b; --accent-red: #ef4444; --accent-purple: #a78bfa;
+            --gradient-hero: linear-gradient(135deg, #3b82f6 0%, #a78bfa 50%, #22d3ee 100%);
+            --mono: 'JetBrains Mono', monospace; --sans: 'Outfit', sans-serif;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: var(--sans); background: var(--bg-deep); color: var(--text-primary); line-height: 1.7; overflow-x: hidden; }
+        body::before { content: ''; position: fixed; inset: 0; background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E"); pointer-events: none; z-index: 9999; }
+        .grid-bg { position: fixed; inset: 0; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 60px 60px; opacity: 0.15; pointer-events: none; mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 70%); }
+        nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 1rem 2rem; background: rgba(6, 8, 13, 0.85); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .nav-brand { font-family: var(--mono); font-weight: 700; font-size: 1.2rem; color: var(--accent-cyan); text-decoration: none; display: flex; align-items: center; gap: 0.5rem; }
+        .nav-brand .cursor { display: inline-block; width: 2px; height: 1.1em; background: var(--accent-cyan); animation: blink 1s step-end infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        .nav-links { display: flex; gap: 0.3rem; list-style: none; flex-wrap: wrap; }
+        .nav-links a { font-family: var(--mono); font-size: 0.78rem; color: var(--text-secondary); text-decoration: none; padding: 0.4rem 0.7rem; border-radius: 6px; transition: all 0.2s ease; white-space: nowrap; }
+        .nav-links a:hover { color: var(--accent-cyan); background: var(--bg-accent); }
+        .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 8rem 2rem 4rem; position: relative; }
+        .hero-glow { position: absolute; width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(167, 139, 250, 0.07) 0%, transparent 70%); top: 10%; left: 50%; transform: translateX(-50%); pointer-events: none; }
+        .hero-tag { font-family: var(--mono); font-size: 0.8rem; color: var(--accent-green); background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); padding: 0.4rem 1rem; border-radius: 999px; margin-bottom: 2rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .hero-tag .dot { width: 6px; height: 6px; background: var(--accent-green); border-radius: 50%; animation: pulse-dot 2s infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); } }
+        .hero h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1; margin-bottom: 1.5rem; letter-spacing: -0.03em; }
+        .hero h1 .gradient-text { background: var(--gradient-hero); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .hero-desc { font-size: 1.15rem; color: var(--text-secondary); max-width: 620px; margin-bottom: 3rem; }
+        .hero-cta { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+        .stack-bar { margin-top: 3.5rem; display: flex; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+        .stack-tag { font-family: var(--mono); font-size: 0.78rem; padding: 0.35rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); color: var(--text-muted); transition: all 0.3s ease; }
+        .stack-tag:hover { color: var(--text-primary); border-color: var(--text-muted); }
+        .stack-tag.php { color: #8892be; border-color: #8892be44; } .stack-tag.go { color: #00add8; border-color: #00add844; }
+        .stack-tag.node { color: #68a063; border-color: #68a06344; } .stack-tag.pg { color: #336791; border-color: #33679144; }
+        .stack-tag.mysql { color: #f29111; border-color: #f2911144; } .stack-tag.nginx { color: #009639; border-color: #00963944; }
+        .stack-tag.js { color: #f7df1e; border-color: #f7df1e44; } .stack-tag.linux { color: #fcc624; border-color: #fcc62444; }
+        .stack-tag.docker { color: #2496ed; border-color: #2496ed44; }
+        .btn { font-family: var(--mono); font-size: 0.85rem; font-weight: 500; padding: 0.8rem 1.8rem; border-radius: 10px; text-decoration: none; transition: all 0.25s ease; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn-primary { background: var(--accent-blue); color: white; box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3); }
+        .btn-primary:hover { background: #2563eb; box-shadow: 0 6px 30px rgba(59, 130, 246, 0.45); transform: translateY(-2px); }
+        .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+        .btn-outline:hover { color: var(--text-primary); border-color: var(--text-muted); background: var(--bg-accent); }
+        .section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
+        .section-header { margin-bottom: 3rem; }
+        .section-tag { font-family: var(--mono); font-size: 0.75rem; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem; }
+        .section-tag::before { content: '//'; color: var(--text-muted); }
+        .section-title { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+        .section-subtitle { color: var(--text-secondary); font-size: 1rem; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 2rem; margin-bottom: 1.2rem; position: relative; overflow: hidden; transition: all 0.3s ease; }
+        .card:hover { border-color: #2a3a5a; background: var(--bg-card-hover); }
+        .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--accent-blue), transparent); opacity: 0; transition: opacity 0.3s ease; }
+        .card:hover::before { opacity: 0.5; }
+        .card-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 1.2rem; border: 1px solid; }
+        .card-icon.blue { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.2); }
+        .card-icon.cyan { background: rgba(34, 211, 238, 0.1); border-color: rgba(34, 211, 238, 0.2); }
+        .card-icon.green { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+        .card-icon.amber { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+        .card-icon.red { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); }
+        .card h3 { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.8rem; }
+        .card p, .card li { color: var(--text-secondary); font-size: 0.92rem; line-height: 1.8; }
+        .card ul { list-style: none; padding: 0; }
+        .card ul li { padding: 0.3rem 0; padding-left: 1.5rem; position: relative; }
+        .card ul li::before { content: '>'; position: absolute; left: 0; color: var(--accent-cyan); font-family: var(--mono); font-weight: 700; }
+        .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1.2rem; }
+        .service-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 1.8rem; transition: all 0.3s ease; position: relative; overflow: hidden; }
+        .service-card:hover { border-color: #2a3a5a; transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
+        .service-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; opacity: 0; transition: opacity 0.3s ease; }
+        .service-card:hover::before { opacity: 1; }
+        .service-card.s-backend::before { background: linear-gradient(90deg, #00add8, #8892be); }
+        .service-card.s-frontend::before { background: linear-gradient(90deg, #f7df1e, #61dafb); }
+        .service-card.s-db::before { background: linear-gradient(90deg, #336791, #f29111); }
+        .service-card.s-devops::before { background: linear-gradient(90deg, #2496ed, #009639); }
+        .service-card.s-api::before { background: linear-gradient(90deg, #a78bfa, #3b82f6); }
+        .service-card.s-support::before { background: linear-gradient(90deg, #10b981, #22d3ee); }
+        .service-card .s-icon { font-size: 1.5rem; margin-bottom: 1rem; }
+        .service-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; }
+        .service-card p { color: var(--text-secondary); font-size: 0.85rem; line-height: 1.7; }
+        .service-card .s-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 1rem; }
+        .service-card .s-tag { font-family: var(--mono); font-size: 0.65rem; padding: 0.2rem 0.5rem; border-radius: 4px; background: var(--bg-accent); color: var(--text-muted); border: 1px solid var(--border); }
+        .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; }
+        .price-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 2rem; position: relative; transition: all 0.3s ease; }
+        .price-card:hover { border-color: #2a3a5a; transform: translateY(-4px); }
+        .price-card.featured { border-color: var(--accent-blue); box-shadow: 0 0 40px rgba(59, 130, 246, 0.1); }
+        .price-card.featured::after { content: 'Популярный'; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 0.7rem; background: var(--accent-blue); color: white; padding: 0.2rem 0.8rem; border-radius: 999px; }
+        .price-label { font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+        .price-name { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.3rem; }
+        .price-amount { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; color: var(--accent-cyan); margin-bottom: 0.2rem; }
+        .price-amount span { font-size: 0.85rem; font-weight: 400; color: var(--text-muted); }
+        .price-desc { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 1.2rem; }
+        .price-features { list-style: none; }
+        .price-features li { font-size: 0.85rem; color: var(--text-secondary); padding: 0.35rem 0; display: flex; align-items: center; gap: 0.6rem; }
+        .price-features li::before { content: '\2713'; color: var(--accent-green); font-weight: 700; font-size: 0.8rem; }
+        .code-block { font-family: var(--mono); font-size: 0.82rem; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem 1.5rem; margin: 1rem 0; color: var(--text-secondary); overflow-x: auto; }
+        .code-block .comment { color: var(--text-muted); } .code-block .key { color: var(--accent-cyan); }
+        .code-block .value { color: var(--accent-green); } .code-block .str { color: var(--accent-amber); }
+        .steps { counter-reset: step; }
+        .step { display: flex; gap: 1.5rem; margin-bottom: 2rem; align-items: flex-start; }
+        .step-num { counter-increment: step; flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px; background: var(--bg-accent); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 0.85rem; font-weight: 600; color: var(--accent-cyan); }
+        .step-num::after { content: counter(step); }
+        .step-content h4 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+        .step-content p { color: var(--text-secondary); font-size: 0.9rem; }
+        .divider { height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent); margin: 1rem 0; }
+        .contact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .contact-item { display: flex; align-items: center; gap: 0.8rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; text-decoration: none; color: var(--text-primary); transition: all 0.2s ease; }
+        .contact-item:hover { border-color: var(--accent-blue); background: var(--bg-card-hover); }
+        .contact-item .icon { width: 36px; height: 36px; border-radius: 8px; background: var(--bg-accent); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+        .contact-item .label { font-size: 0.75rem; color: var(--text-muted); font-family: var(--mono); }
+        .contact-item .val { font-size: 0.9rem; }
+        footer { padding: 3rem 2rem; text-align: center; border-top: 1px solid var(--border); }
+        .footer-legal { font-family: var(--mono); font-size: 0.78rem; color: var(--text-muted); max-width: 700px; margin: 0 auto; line-height: 1.8; }
+        .footer-legal strong { color: var(--text-secondary); }
+        @media (max-width: 768px) { nav { padding: 0.8rem 1rem; flex-wrap: wrap; gap: 0.5rem; } .nav-links { gap: 0.1rem; } .nav-links a { font-size: 0.7rem; padding: 0.3rem 0.5rem; } .hero { padding: 7rem 1.2rem 3rem; } .section { padding: 3rem 1.2rem; } .card { padding: 1.5rem; } .step { gap: 1rem; } .stack-bar { gap: 0.8rem; } }
+        @keyframes fade-up { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        .animate { opacity: 0; animation: fade-up 0.6s ease forwards; }
+        .animate.d1 { animation-delay: 0.1s; } .animate.d2 { animation-delay: 0.2s; }
+        .animate.d3 { animation-delay: 0.3s; } .animate.d4 { animation-delay: 0.4s; }
+
+        /* OFERTA MODAL */
+        .oferta-overlay { display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.85); backdrop-filter:blur(8px); overflow-y:auto; -webkit-overflow-scrolling:touch; }
+        .oferta-overlay.active { display:block; }
+        .oferta-container { width:100%; max-width:900px; margin:0 auto; min-height:100vh; background:#0f1624; border-left:1px solid var(--border); border-right:1px solid var(--border); }
+        .oferta-header { position:sticky; top:0; z-index:10; display:flex; justify-content:space-between; align-items:center; padding:1rem 2rem; background:rgba(15,22,36,0.95); backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
+        .oferta-header h3 { font-family:var(--mono); font-size:0.9rem; color:var(--accent-cyan); font-weight:600; }
+        .oferta-close { width:36px; height:36px; border-radius:8px; background:var(--bg-accent); border:1px solid var(--border); color:var(--text-secondary); font-size:1.2rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease; font-family:var(--mono); }
+        .oferta-close:hover { background:var(--accent-red); border-color:var(--accent-red); color:white; }
+        .oferta-body { padding:2rem; color:var(--text-secondary); font-size:0.92rem; line-height:1.9; }
+        .oferta-body h1,.oferta-body h2,.oferta-body h3,.oferta-body h4,.oferta-body h5,.oferta-body h6 { color:var(--text-primary); margin:1.5rem 0 0.8rem; }
+        .oferta-body h1 { font-size:1.5rem; } .oferta-body h2 { font-size:1.25rem; } .oferta-body h3 { font-size:1.1rem; }
+        .oferta-body p { margin-bottom:0.8rem; }
+        .oferta-body table { width:100%; border-collapse:collapse; margin:1rem 0; }
+        .oferta-body table th,.oferta-body table td { padding:0.6rem; border:1px solid var(--border); text-align:left; }
+        .oferta-body table th { background:var(--bg-accent); color:var(--text-primary); }
+        .oferta-body ul,.oferta-body ol { padding-left:1.5rem; margin-bottom:0.8rem; }
+        .oferta-body li { margin-bottom:0.3rem; }
+        .oferta-body strong { color:var(--text-primary); }
+        .oferta-loading { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:4rem 2rem; color:var(--text-muted); font-family:var(--mono); font-size:0.85rem; gap:1rem; }
+        .oferta-spinner { width:32px; height:32px; border:2px solid var(--border); border-top-color:var(--accent-cyan); border-radius:50%; animation:spin 0.8s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .oferta-error { text-align:center; padding:3rem; color:var(--accent-red); font-family:var(--mono); }
+        .oferta-error a { color:var(--accent-cyan); text-decoration:none; border-bottom:1px dashed var(--accent-cyan); }
+        .oferta-actions { display:flex; gap:0.5rem; align-items:center; }
+        .oferta-download { padding:0.4rem 0.8rem; border-radius:6px; background:var(--bg-accent); border:1px solid var(--border); color:var(--text-secondary); font-family:var(--mono); font-size:0.75rem; cursor:pointer; text-decoration:none; transition:all 0.2s ease; }
+        .oferta-download:hover { background:var(--accent-blue); border-color:var(--accent-blue); color:white; }
+        .policy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; margin-top: 1.2rem; }
+        .policy-item { display: flex; gap: 0.8rem; align-items: flex-start; padding: 1rem; background: var(--bg-deep); border: 1px solid var(--border); border-radius: 10px; }
+        .policy-item .p-icon { flex-shrink: 0; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .policy-item .p-icon.pi-cyan { background: rgba(34, 211, 238, 0.1); }
+        .policy-item .p-icon.pi-green { background: rgba(16, 185, 129, 0.1); }
+        .policy-item .p-icon.pi-amber { background: rgba(245, 158, 11, 0.1); }
+        .policy-item .p-icon.pi-blue { background: rgba(59, 130, 246, 0.1); }
+        .policy-item .p-icon.pi-purple { background: rgba(167, 139, 250, 0.1); }
+        .policy-item .p-icon.pi-red { background: rgba(239, 68, 68, 0.1); }
+        .policy-item h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; }
+        .policy-item p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<nav>
+    <a href="#top" class="nav-brand">xstreamka<span class="cursor"></span>dev</a>
+    <ul class="nav-links">
+        <li><a href="#services">Услуги</a></li>
+        <li><a href="#pricing">Стоимость</a></li>
+        <li><a href="#order">Заказ</a></li>
+        <li><a href="#payment">Оплата</a></li>
+        <li><a href="#refund">Возврат</a></li>
+        <li><a href="#contacts">Контакты</a></li>
+        <li><a href="#privacy">Данные</a></li>
+        <li><a href="#" onclick="openOferta();return false;" style="color:var(--accent-amber);">Оферта</a></li>
+    </ul>
+</nav>
+
+<section class="hero" id="top">
+    <div class="hero-glow"></div>
+    <div class="animate"><div class="hero-tag"><span class="dot"></span>Принимаю заказы</div></div>
+    <h1 class="animate d1">Веб-разработка<br><span class="gradient-text">и программирование</span></h1>
+    <p class="hero-desc animate d2">Backend, frontend, базы данных, API, DevOps.<br>Чистый, рабочий код — от скрипта до полноценного сервиса.</p>
+    <div class="hero-cta animate d3">
+        <a href="#pricing" class="btn btn-primary">Стоимость &rarr;</a>
+        <a href="#contacts" class="btn btn-outline">Написать мне</a>
+    </div>
+    <div class="stack-bar animate d4">
+        <span class="stack-tag php">PHP 8.5</span>
+        <span class="stack-tag go">Go</span>
+        <span class="stack-tag node">Node.js</span>
+        <span class="stack-tag js">JavaScript</span>
+        <span class="stack-tag pg">PostgreSQL</span>
+        <span class="stack-tag mysql">MySQL</span>
+        <span class="stack-tag nginx">Nginx</span>
+        <span class="stack-tag linux">Linux</span>
+        <span class="stack-tag docker">Docker</span>
+    </div>
+</section>
+
+<section class="section" id="services">
+    <div class="section-header">
+        <div class="section-tag">Услуги</div>
+        <h2 class="section-title">Что я делаю</h2>
+        <p class="section-subtitle">Полный цикл — от идеи до деплоя на продакшн</p>
+    </div>
+    <div class="services-grid">
+        <div class="service-card s-backend"><div class="s-icon">&#9881;&#65039;</div><h3>Backend-разработка</h3><p>Серверная логика, REST API, микросервисы, обработка данных, фоновые задачи, очереди, cron-сценарии.</p><div class="s-tags"><span class="s-tag">PHP</span><span class="s-tag">Go</span><span class="s-tag">Node.js</span><span class="s-tag">Yii2</span></div></div>
+        <div class="service-card s-frontend"><div class="s-icon">&#127912;</div><h3>Frontend и вёрстка</h3><p>Адаптивная вёрстка, интерактивные интерфейсы, SPA, лендинги, интеграция с backend.</p><div class="s-tags"><span class="s-tag">HTML/CSS</span><span class="s-tag">JavaScript</span><span class="s-tag">HTMX</span><span class="s-tag">Tailwind</span></div></div>
+        <div class="service-card s-db"><div class="s-icon">&#128451;&#65039;</div><h3>Базы данных</h3><p>Проектирование схем, оптимизация запросов, миграции, репликация, бэкапы.</p><div class="s-tags"><span class="s-tag">PostgreSQL</span><span class="s-tag">MySQL</span><span class="s-tag">Redis</span><span class="s-tag">SQLite</span></div></div>
+        <div class="service-card s-devops"><div class="s-icon">&#128051;</div><h3>DevOps и серверы</h3><p>Настройка серверов, Docker, CI/CD, мониторинг, Nginx, SSL, автоматизация деплоя.</p><div class="s-tags"><span class="s-tag">Docker</span><span class="s-tag">Linux</span><span class="s-tag">Nginx</span><span class="s-tag">CI/CD</span></div></div>
+        <div class="service-card s-api"><div class="s-icon">&#128268;</div><h3>Интеграции и API</h3><p>Платёжные системы, CRM, телеграм-боты, внешние сервисы, парсинг данных.</p><div class="s-tags"><span class="s-tag">REST</span><span class="s-tag">gRPC</span><span class="s-tag">Webhooks</span><span class="s-tag">Telegram</span></div></div>
+        <div class="service-card s-support"><div class="s-icon">&#128295;</div><h3>Доработка и поддержка</h3><p>Рефакторинг, исправление багов, оптимизация, аудит кода существующих проектов.</p><div class="s-tags"><span class="s-tag">Code Review</span><span class="s-tag">Refactoring</span><span class="s-tag">Bugfix</span></div></div>
+    </div>
+</section>
+
+<section class="section" id="pricing">
+    <div class="section-header">
+        <div class="section-tag">Стоимость</div>
+        <h2 class="section-title">Тарифы и цены</h2>
+        <p class="section-subtitle">Фиксированная стоимость за задачу или почасовая оплата</p>
+    </div>
+    <div class="pricing-grid">
+        <div class="price-card"><div class="price-label">Микрозадача</div><div class="price-name">Quick Fix</div><div class="price-amount">500 &ndash; 2 000 <span>&#8381;</span></div><p class="price-desc">Мелкие правки и исправления</p><ul class="price-features"><li>Исправление бага</li><li>Небольшая доработка</li><li>Консультация по коду</li><li>Срок: 1&ndash;2 дня</li></ul></div>
+        <div class="price-card featured"><div class="price-label">Задача</div><div class="price-name">Feature</div><div class="price-amount">2 000 &ndash; 15 000 <span>&#8381;</span></div><p class="price-desc">Функция, модуль, интеграция</p><ul class="price-features"><li>Новая функциональность</li><li>Интеграция с API</li><li>Вёрстка страницы</li><li>Настройка сервера</li><li>Срок: 3&ndash;7 дней</li></ul></div>
+        <div class="price-card"><div class="price-label">Проект</div><div class="price-name">Full Build</div><div class="price-amount">15 000 &ndash; 100 000 <span>&#8381;</span></div><p class="price-desc">Сервис, сайт, система с нуля</p><ul class="price-features"><li>Архитектура и проектирование</li><li>Backend + Frontend</li><li>База данных и деплой</li><li>Документация</li><li>Срок: от 2 недель</li></ul></div>
+    </div>
+    <div class="card" style="margin-top: 1.5rem;"><div class="code-block" style="margin: 0;"><span class="comment">// Почасовая ставка (альтернатива фиксу)</span><br><br><span class="key">hourly_rate</span>:&nbsp;&nbsp;<span class="value">2000</span> <span class="str">&#8381;/час</span><br><span class="key">min_order</span>:&nbsp;&nbsp;&nbsp;<span class="value">1</span> <span class="str">час</span><br><span class="key">tracking</span>:&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"по факту с отчётом"</span></div></div>
+
+    <!-- Политика ценообразования -->
+    <div class="card" style="margin-top: 1.2rem;">
+        <div class="card-icon cyan">&#9878;</div>
+        <h3>Политика ценообразования</h3>
+        <p>Стоимость каждого заказа определяется индивидуально после обсуждения задачи. Указанные диапазоны &mdash; ориентир для типовых задач. На итоговую цену влияют:</p>
+        <div class="policy-grid">
+            <div class="policy-item">
+                <div class="p-icon pi-cyan">&#128202;</div>
+                <div>
+                    <h4>Сложность задачи</h4>
+                    <p>Количество бизнес-логики, нестандартные алгоритмы, интеграции с внешними сервисами</p>
+                </div>
+            </div>
+            <div class="policy-item">
+                <div class="p-icon pi-green">&#9201;</div>
+                <div>
+                    <h4>Объём работы</h4>
+                    <p>Количество функций, страниц, endpoint&rsquo;ов, таблиц в БД</p>
+                </div>
+            </div>
+            <div class="policy-item">
+                <div class="p-icon pi-amber">&#9889;</div>
+                <div>
+                    <h4>Срочность</h4>
+                    <p>Задачи &laquo;на вчера&raquo; с дедлайном до 24 часов &mdash; наценка +50%</p>
+                </div>
+            </div>
+            <div class="policy-item">
+                <div class="p-icon pi-blue">&#128736;</div>
+                <div>
+                    <h4>Стек технологий</h4>
+                    <p>Работа с незнакомыми библиотеками или legacy-кодом может увеличить оценку</p>
+                </div>
+            </div>
+            <div class="policy-item">
+                <div class="p-icon pi-purple">&#128196;</div>
+                <div>
+                    <h4>Чёткость ТЗ</h4>
+                    <p>Подробное техзадание снижает стоимость &mdash; меньше итераций и уточнений</p>
+                </div>
+            </div>
+            <div class="policy-item">
+                <div class="p-icon pi-red">&#128176;</div>
+                <div>
+                    <h4>Схема оплаты</h4>
+                    <p>Фикс за задачу или почасовая &mdash; выбирайте удобный вариант</p>
+                </div>
+            </div>
+        </div>
+        <div class="divider"></div>
+        <p>Перед началом работы вы всегда получаете точную стоимость и сроки. Без скрытых доплат &mdash; цена фиксируется после согласования и не меняется в процессе.</p>
+    </div>
+
+    <p style="text-align: center; color: var(--text-muted); font-size: 0.82rem; margin-top: 1.5rem; font-family: var(--mono);">Цены указаны в российских рублях. Точная стоимость определяется после обсуждения задачи.</p>
+</section>
+
+<section class="section" id="order">
+    <div class="section-header"><div class="section-tag">Оформление заказа</div><h2 class="section-title">Как начать работу</h2><p class="section-subtitle">Простой процесс от заявки до результата</p></div>
+    <div class="steps">
+        <div class="step"><div class="step-num"></div><div class="step-content"><h4>Обсуждение задачи</h4><p>Напишите мне в Telegram или на email. Опишите задачу: что нужно сделать, какой стек, есть ли готовый код. Я оценю объём и назову стоимость.</p></div></div>
+        <div class="step"><div class="step-num"></div><div class="step-content"><h4>Согласование и оплата</h4><p>После согласования деталей выставляю счёт. Оплата через безопасные платёжные системы. Для крупных проектов &mdash; поэтапная оплата (предоплата 50%).</p></div></div>
+        <div class="step"><div class="step-num"></div><div class="step-content"><h4>Разработка</h4><p>Выполняю задачу в оговорённые сроки. По ходу работы информирую о прогрессе. Промежуточные результаты доступны для проверки.</p></div></div>
+        <div class="step"><div class="step-num"></div><div class="step-content"><h4>Сдача и гарантия</h4><p>Передаю код, доступы, документацию. Гарантийные правки по ТЗ &mdash; бесплатно 14 дней после сдачи.</p></div></div>
+    </div>
+    <div class="card"><div class="card-icon green">&#9201;</div><h3>Сроки исполнения</h3><ul><li>Микрозадача (Quick Fix): 1&ndash;2 рабочих дня</li><li>Функция / модуль (Feature): 3&ndash;7 рабочих дней</li><li>Проект (Full Build): от 2 недель, точный срок согласовывается</li><li>Срочные задачи: возможно за 24 часа (наценка +50%)</li></ul><div class="divider"></div><p>Сроки отсчитываются с момента подтверждения оплаты. Если задача требует больше времени &mdash; предупреждаю заранее.</p></div>
+</section>
+
+<section class="section" id="payment">
+    <div class="section-header"><div class="section-tag">Оплата</div><h2 class="section-title">Способы оплаты</h2><p class="section-subtitle">Безопасные платежи через проверенные системы</p></div>
+    <div class="card"><div class="card-icon blue">&#128179;</div><h3>Принимаемые способы оплаты</h3><ul><li>Банковские карты: Visa, Mastercard, МИР</li><li>Система быстрых платежей (СБП)</li><li>ЮMoney (ЮКасса)</li><li>SberPay</li></ul><div class="divider"></div><p>Обработка платежей осуществляется через защищённые сервисы <strong style="color:var(--text-primary)">Робокасса</strong> и <strong style="color:var(--text-primary)">ЮKassa</strong>. Данные банковской карты не хранятся у меня и передаются в зашифрованном виде напрямую платёжному оператору.</p><div class="divider"></div><p>Оплата в российских рублях. По каждому платежу формируется электронный чек. Для крупных проектов возможна поэтапная оплата с предоплатой 50%. Подробные условия &mdash; в <a href="#" onclick="openOferta();return false;" style="color:var(--accent-cyan); text-decoration: none; border-bottom: 1px dashed var(--accent-cyan);">публичной оферте</a>.</p></div>
+</section>
+
+<section class="section" id="delivery">
+    <div class="section-header"><div class="section-tag">Оказание услуг</div><h2 class="section-title">Порядок предоставления</h2></div>
+    <div class="card"><div class="card-icon cyan">&#128225;</div><h3>Как предоставляется услуга</h3><p>Услуги оказываются дистанционно. Результат передаётся в электронном виде: исходный код через Git-репозиторий, архивом или прямой передачей файлов.</p><div class="divider"></div><ul><li>Услуга считается оказанной с момента передачи результата заказчику</li><li>Результат включает: исходный код, инструкции по запуску, документацию</li><li>Приёмка результата &mdash; в течение 5 рабочих дней после передачи</li><li>Гарантийные правки в рамках ТЗ &mdash; бесплатно 14 дней</li><li>Все права на созданный код переходят заказчику после полной оплаты</li></ul></div>
+</section>
+
+<section class="section" id="refund">
+    <div class="section-header"><div class="section-tag">Возврат средств</div><h2 class="section-title">Возврат и отказ от услуги</h2></div>
+    <div class="card"><div class="card-icon amber">&#8617;</div><h3>Порядок возврата</h3><p>Вы имеете право отказаться от услуги и получить возврат средств:</p><div class="divider"></div><h4 style="margin: 1rem 0 0.5rem; color: var(--accent-green);">&#10022; До начала работ</h4><p>Если работа ещё не начата &mdash; полный возврат в течение <strong style="color:var(--text-primary)">14 дней</strong> с момента оплаты. Без каких-либо удержаний и комиссий.</p><h4 style="margin: 1.2rem 0 0.5rem; color: var(--accent-amber);">&#10022; В процессе выполнения</h4><p>Если часть работы выполнена &mdash; возврат за вычетом стоимости фактически сделанного. Объём определяется по согласованию. Комиссии платёжных систем <strong style="color:var(--text-primary)">не удерживаются</strong>.</p><h4 style="margin: 1.2rem 0 0.5rem; color: var(--accent-red);">&#10022; Нарушение сроков</h4><p>Если исполнитель нарушает сроки более чем на 7 рабочих дней без уважительной причины &mdash; полный возврат оплаты.</p></div>
+    <div class="card"><div class="card-icon blue">&#128203;</div><h3>Как оформить возврат</h3><div class="steps" style="margin-top: 1rem;"><div class="step"><div class="step-num"></div><div class="step-content"><h4>Направьте заявку</h4><p>Напишите на <a href="mailto:mail@xstreamka.dev"><strong style="color:var(--accent-cyan)">mail@xstreamka.dev</strong></a> или в Telegram <strong style="color:var(--accent-cyan)">@XStreamka</strong>. Укажите номер заказа и причину.</p></div></div><div class="step"><div class="step-num"></div><div class="step-content"><h4>Рассмотрение</h4><p>Заявка рассматривается в течение 3 рабочих дней. Подтверждение придёт на email.</p></div></div><div class="step"><div class="step-num"></div><div class="step-content"><h4>Возврат средств</h4><p>Деньги возвращаются тем же способом оплаты, до 10 рабочих дней. Без удержания комиссий.</p></div></div></div></div>
+</section>
+
+<section class="section" id="contacts">
+    <div class="section-header"><div class="section-tag">Контакты</div><h2 class="section-title">Свяжитесь со мной</h2></div>
+    <div class="contact-grid">
+        <a href="mailto:mail@xstreamka.dev" class="contact-item"><div class="icon">&#9993;</div><div><div class="label">Email</div><div class="val">mail@xstreamka.dev</div></div></a>
+        <a href="https://t.me/xstreamka" class="contact-item" target="_blank"><div class="icon">&#128172;</div><div><div class="label">Telegram</div><div class="val">@XStreamka</div></div></a>
+        <div class="contact-item"><div class="icon">&#128336;</div><div><div class="label">Время ответа</div><div class="val">до 24 часов</div></div></div>
+    </div>
+</section>
+
+<section class="section" id="requisites">
+    <div class="section-header"><div class="section-tag">Реквизиты</div><h2 class="section-title">Юридическая информация</h2></div>
+    <div class="card"><div class="card-icon green">&#128196;</div><h3>Реквизиты исполнителя</h3><div class="code-block"><span class="comment">// Данные самозанятого (НПД)</span><br><br><span class="key">name</span>:&nbsp;&nbsp;&nbsp;<span class="str">"Дурцев Петр Юрьевич"</span><br><span class="key">inn</span>:&nbsp;&nbsp;&nbsp;&nbsp;<span class="str">"524808237445"</span><br><span class="key">status</span>: <span class="value">Самозанятый (плательщик НПД)</span><br><span class="key">region</span>: <span class="str">"Нижний Новгород"</span></div><p style="margin-top: 0.8rem; font-size: 0.85rem;">По каждой оплате формируется электронный чек в соответствии с ФЗ &numero; 422 &laquo;О проведении эксперимента по установлению специального налогового режима&raquo;.</p></div>
+</section>
+
+<section class="section" id="privacy">
+    <div class="section-header"><div class="section-tag">Персональные данные</div><h2 class="section-title">Политика обработки данных</h2></div>
+    <div class="card"><div class="card-icon red">&#128737;</div><h3>Какие данные собираются</h3><ul><li>Имя или псевдоним &mdash; для обращения и идентификации</li><li>Email &mdash; для связи и отправки результата</li><li>Контакт в мессенджере &mdash; для оперативной связи по проекту</li><li>Данные об оплате &mdash; передаются напрямую платёжному оператору</li></ul></div>
+    <div class="card"><div class="card-icon blue">&#128202;</div><h3>Как используются данные</h3><ul><li>Связь по вопросам выполнения заказа</li><li>Передача результатов работы</li><li>Формирование чеков и учёт</li><li>Выполнение требований законодательства РФ</li></ul><div class="divider"></div><p>Данные <strong style="color:var(--accent-green)">не передаются третьим лицам</strong>, за исключением случаев, предусмотренных законодательством, и передачи платёжному оператору.</p></div>
+    <div class="card"><div class="card-icon amber">&#128100;</div><h3>Ваши права</h3><ul><li>Запросить информацию об обрабатываемых данных</li><li>Потребовать исправления неточных данных</li><li>Потребовать удаления всех данных о себе</li><li>Отозвать согласие на обработку</li></ul><div class="divider"></div><p>Для реализации прав направьте запрос на <a href="mailto:mail@xstreamka.dev"><strong style="color:var(--accent-cyan)">mail@xstreamka.dev</strong></a>. Срок обработки &mdash; 10 рабочих дней.</p></div>
+    <div class="card"><p style="font-size: 0.88rem;">Оплачивая услугу, вы подтверждаете согласие с <a href="#" onclick="openOferta();return false;" style="color:var(--accent-cyan); text-decoration: none; border-bottom: 1px dashed var(--accent-cyan);">публичной офертой</a>, настоящей политикой и условиями оказания услуг на данной странице.</p></div>
+</section>
+
+<footer>
+    <div class="footer-legal">
+        <strong>&copy; 2026 XStreamka Dev</strong><br>
+        Самозанятый Дурцев Петр Юрьевич &middot; ИНН 524808237445<br><br>
+        Услуги оказываются дистанционно на территории Российской Федерации.<br>
+        <a href="#" onclick="openOferta();return false;" style="color:var(--accent-cyan); text-decoration: none; border-bottom: 1px dashed var(--accent-cyan);">Публичная оферта (договор)</a><br><br>
+        <span style="color: var(--text-muted);">Платежи обрабатываются через Робокасса и ЮKassa</span>
+    </div>
+</footer>
+
+<!-- OFERTA MODAL -->
+<div class="oferta-overlay" id="ofertaModal">
+    <div class="oferta-container">
+        <div class="oferta-header">
+            <h3>// Публичная оферта</h3>
+            <div class="oferta-actions">
+                <a href="oferta_524808237445.docx" download class="oferta-download">&#8681; .docx</a>
+                <button class="oferta-close" onclick="closeOferta()">&times;</button>
+            </div>
+        </div>
+        <div class="oferta-body" id="ofertaBody">
+            <div class="oferta-loading"><div class="oferta-spinner"></div>Загрузка документа...</div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+<script>
+let ofertaLoaded = false;
+function openOferta() {
+    const modal = document.getElementById('ofertaModal');
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    if (!ofertaLoaded) {
+        fetch('oferta_524808237445.docx')
+            .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+            .then(buf => mammoth.convertToHtml({ arrayBuffer: buf }))
+            .then(result => { document.getElementById('ofertaBody').innerHTML = result.value; ofertaLoaded = true; })
+            .catch(() => { document.getElementById('ofertaBody').innerHTML = '<div class="oferta-error">Не удалось загрузить документ.<br><br><a href="oferta_524808237445.docx" download>Скачать файл напрямую</a></div>'; });
+    }
+}
+function closeOferta() { document.getElementById('ofertaModal').classList.remove('active'); document.body.style.overflow = ''; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOferta(); });
+document.getElementById('ofertaModal').addEventListener('click', e => { if (e.target === e.currentTarget) closeOferta(); });
+
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    if (a.onclick) return;
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        const t = document.querySelector(a.getAttribute('href'));
+        if (t) window.scrollTo({ top: t.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+    });
+});
+const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.style.opacity='1'; e.target.style.transform='translateY(0)'; }});
+}, { threshold: 0.1 });
+document.querySelectorAll('.card,.step,.price-card,.service-card,.contact-item,.policy-item').forEach(el => {
+    el.style.opacity='0'; el.style.transform='translateY(20px)';
+    el.style.transition='opacity 0.5s ease, transform 0.5s ease';
+    obs.observe(el);
+});
+</script>
+</body>
+</html>
