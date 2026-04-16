@@ -107,7 +107,7 @@ func (r *Robokassa) GeneratePaymentURL(invID int, outSum float64, description st
 	params.Set("SignatureValue", signature)
 
 	if receiptJSON != "" {
-		params.Set("Receipt", url.QueryEscape(receiptJSON))
+		params.Set("Receipt", receiptJSON)
 	}
 	if email != "" {
 		params.Set("Email", email)
