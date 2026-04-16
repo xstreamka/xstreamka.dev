@@ -82,4 +82,15 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`,
 	`CREATE INDEX IF NOT EXISTS idx_payments_product_type ON payments(product_type)`,
 	`CREATE INDEX IF NOT EXISTS idx_payments_user_ref ON payments(user_ref)`,
+
+	// Статус доставки webhook-а в callback_url
+	`ALTER TABLE payments ADD COLUMN IF NOT EXISTS webhook_delivered_at TIMESTAMPTZ`,
+	`ALTER TABLE payments ADD COLUMN IF NOT EXISTS webhook_attempts INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE payments ADD COLUMN IF NOT EXISTS webhook_last_attempt_at TIMESTAMPTZ`,
+	`ALTER TABLE payments ADD COLUMN IF NOT EXISTS webhook_last_error TEXT`,
+
+	// Индекс для reconciler-а: найти оплаченные но недоставленные, свежие
+	`CREATE INDEX IF NOT EXISTS idx_payments_pending_webhook
+ 	ON payments(paid_at)
+ 	WHERE status = 'paid' AND callback_url <> '' AND webhook_delivered_at IS NULL`,
 }

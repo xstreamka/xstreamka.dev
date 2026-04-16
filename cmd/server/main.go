@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"pay-service/internal/reconciler"
 	"syscall"
 	"time"
 
@@ -45,6 +47,11 @@ func main() {
 	})
 
 	webhookSender := payment.NewWebhookSender(cfg.WebhookSecret)
+
+	// Reconciler — добивает непришедшие webhook-и
+	rec := reconciler.New(paymentStore, webhookSender, reconciler.DefaultConfig())
+	ctx, cancel := context.WithCancel(context.Background())
+	go rec.Run(ctx)
 
 	tmpl, err := template.ParseGlob("internal/templates/pay/*.html")
 	if err != nil {
@@ -104,6 +111,7 @@ func main() {
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
 		log.Println("Shutting down...")
+		cancel() // ← останавливаем reconciler
 		srv.Close()
 	}()
 

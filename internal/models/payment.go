@@ -18,21 +18,25 @@ const (
 )
 
 type Payment struct {
-	ID          int             `json:"id"`
-	InvID       int             `json:"inv_id"`
-	ProductType string          `json:"product_type"`
-	PlanID      string          `json:"plan_id"`
-	Amount      float64         `json:"amount"`
-	Description string          `json:"description"`
-	Status      PaymentStatus   `json:"status"`
-	PaidAt      *time.Time      `json:"paid_at,omitempty"`
-	CallbackURL string          `json:"callback_url"`
-	ReturnURL   string          `json:"return_url"`
-	UserRef     string          `json:"user_ref"`
-	Email       string          `json:"email"`
-	Metadata    json.RawMessage `json:"metadata"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID                   int             `json:"id"`
+	InvID                int             `json:"inv_id"`
+	ProductType          string          `json:"product_type"`
+	PlanID               string          `json:"plan_id"`
+	Amount               float64         `json:"amount"`
+	Description          string          `json:"description"`
+	Status               PaymentStatus   `json:"status"`
+	PaidAt               *time.Time      `json:"paid_at,omitempty"`
+	CallbackURL          string          `json:"callback_url"`
+	ReturnURL            string          `json:"return_url"`
+	UserRef              string          `json:"user_ref"`
+	Email                string          `json:"email"`
+	Metadata             json.RawMessage `json:"metadata"`
+	CreatedAt            time.Time       `json:"created_at"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+	WebhookDeliveredAt   *time.Time      `json:"webhook_delivered_at,omitempty"`
+	WebhookAttempts      int             `json:"webhook_attempts"`
+	WebhookLastAttemptAt *time.Time      `json:"webhook_last_attempt_at,omitempty"`
+	WebhookLastError     *string         `json:"webhook_last_error,omitempty"`
 }
 
 type PaymentStore struct {
@@ -161,4 +165,96 @@ func (s *PaymentStore) ListAll(ctx context.Context, limit int) ([]Payment, error
 		payments = append(payments, p)
 	}
 	return payments, nil
+}
+
+// MarkWebhookDelivered — фиксируем успешную доставку вебхука.
+func (s *PaymentStore) MarkWebhookDelivered(ctx context.Context, invID int) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE payments
+		 SET webhook_delivered_at = NOW(),
+		     webhook_last_attempt_at = NOW(),
+		     webhook_attempts = webhook_attempts + 1,
+		     webhook_last_error = NULL,
+		     updated_at = NOW()
+		 WHERE inv_id = $1`,
+		invID,
+	)
+	return err
+}
+
+// MarkWebhookFailed — увеличиваем счётчик попыток, сохраняем ошибку.
+func (s *PaymentStore) MarkWebhookFailed(ctx context.Context, invID int, errMsg string) error {
+	if len(errMsg) > 500 {
+		errMsg = errMsg[:500]
+	}
+	_, err := s.pool.Exec(ctx,
+		`UPDATE payments
+		 SET webhook_attempts = webhook_attempts + 1,
+		     webhook_last_attempt_at = NOW(),
+		     webhook_last_error = $1,
+		     updated_at = NOW()
+		 WHERE inv_id = $2`,
+		errMsg, invID,
+	)
+	return err
+}
+
+// ListPendingWebhooks — платежи с непришедшей доставкой, для reconciler-а.
+// retryAfter: не повторять, если последняя попытка была раньше этого интервала.
+// maxAge: платежи старше этого возраста игнорируем (считаем safer фейлом).
+func (s *PaymentStore) ListPendingWebhooks(ctx context.Context, retryAfter, maxAge time.Duration, limit int) ([]Payment, error) {
+	const paymentCols = `id, inv_id, product_type, plan_id, amount, description,
+                     status, paid_at, callback_url, return_url, user_ref, email,
+                     metadata, webhook_delivered_at, webhook_attempts,
+                     webhook_last_attempt_at, webhook_last_error,
+                     created_at, updated_at`
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+paymentCols+`
+		 FROM payments
+		 WHERE status = 'paid'
+		   AND callback_url <> ''
+		   AND webhook_delivered_at IS NULL
+		   AND paid_at > NOW() - $1::interval
+		   AND (webhook_last_attempt_at IS NULL OR webhook_last_attempt_at < NOW() - $2::interval)
+		 ORDER BY paid_at
+		 LIMIT $3`,
+		fmt.Sprintf("%d seconds", int(maxAge.Seconds())),
+		fmt.Sprintf("%d seconds", int(retryAfter.Seconds())),
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list pending webhooks: %w", err)
+	}
+	defer rows.Close()
+
+	var list []Payment
+	for rows.Next() {
+		var p Payment
+		if err := rows.Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount,
+			&p.Description, &p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL,
+			&p.UserRef, &p.Email, &p.Metadata, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, p)
+	}
+	return list, nil
+}
+
+// BuildWebhookPayload собирает payload из Payment — используется и в handler, и в reconciler.
+func (p *Payment) BuildWebhookPayload() map[string]any {
+	paidAt := ""
+	if p.PaidAt != nil {
+		paidAt = p.PaidAt.Format(time.RFC3339)
+	}
+	return map[string]any{
+		"inv_id":       p.InvID,
+		"product_type": p.ProductType,
+		"plan_id":      p.PlanID,
+		"amount":       p.Amount,
+		"status":       string(p.Status),
+		"user_ref":     p.UserRef,
+		"email":        p.Email,
+		"metadata":     p.Metadata,
+		"paid_at":      paidAt,
+	}
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -234,8 +235,19 @@ func (h *PaymentHandler) sendWebhook(pmt *models.Payment) {
 		PaidAt:      paidAt,
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
 	if err := h.webhook.Send(pmt.CallbackURL, payload); err != nil {
 		log.Printf("Webhook FAILED for inv_id=%d to %s: %v", pmt.InvID, pmt.CallbackURL, err)
+		if markErr := h.payments.MarkWebhookFailed(ctx, pmt.InvID, err.Error()); markErr != nil {
+			log.Printf("Webhook: mark failed error inv_id=%d: %v", pmt.InvID, markErr)
+		}
+		return
+	}
+
+	if err := h.payments.MarkWebhookDelivered(ctx, pmt.InvID); err != nil {
+		log.Printf("Webhook: mark delivered error inv_id=%d: %v", pmt.InvID, err)
 	}
 }
 
