@@ -115,7 +115,11 @@ func main() {
 
 func logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s", r.Method, r.URL.Path, r.RemoteAddr)
+		ip := r.Header.Get("X-Real-IP")
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+		log.Printf("%s %s %s", r.Method, r.URL.Path, ip)
 		next.ServeHTTP(w, r)
 	})
 }
