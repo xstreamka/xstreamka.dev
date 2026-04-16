@@ -12,18 +12,20 @@ import (
 )
 
 type Config struct {
-	Interval   time.Duration // как часто запускать (рекомендуется 5 минут)
-	RetryAfter time.Duration // не повторять доставку чаще (5 минут)
-	MaxAge     time.Duration // платежи старше — игнорируем (7 дней)
-	BatchLimit int           // не более N платежей за один тик
+	Interval      time.Duration // как часто запускать (рекомендуется 5 минут)
+	RetryAfter    time.Duration // не повторять доставку чаще (5 минут)
+	MaxAge        time.Duration // платежи старше — игнорируем (7 дней)
+	BatchLimit    int           // не более N платежей за один тик
+	PendingMaxAge time.Duration // pending старше этого → failed
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Interval:   5 * time.Minute,
-		RetryAfter: 5 * time.Minute,
-		MaxAge:     7 * 24 * time.Hour,
-		BatchLimit: 50,
+		Interval:      5 * time.Minute,
+		RetryAfter:    5 * time.Minute,
+		MaxAge:        7 * 24 * time.Hour,
+		BatchLimit:    50,
+		PendingMaxAge: 30 * time.Minute,
 	}
 }
 
@@ -62,6 +64,11 @@ func (r *Reconciler) Run(ctx context.Context) {
 }
 
 func (r *Reconciler) tick(ctx context.Context) {
+	r.retryPendingWebhooks(ctx)
+	r.cleanupExpiredPending(ctx)
+}
+
+func (r *Reconciler) retryPendingWebhooks(ctx context.Context) {
 	pmts, err := r.store.ListPendingWebhooks(ctx, r.cfg.RetryAfter, r.cfg.MaxAge, r.cfg.BatchLimit)
 	if err != nil {
 		log.Printf("Reconciler: list pending error: %v", err)
@@ -108,4 +115,16 @@ func (r *Reconciler) tick(ctx context.Context) {
 	}
 
 	log.Printf("Reconciler: tick done, delivered=%d failed=%d", delivered, failed)
+}
+
+func (r *Reconciler) cleanupExpiredPending(ctx context.Context) {
+	n, err := r.store.CleanupExpiredPending(ctx, r.cfg.PendingMaxAge)
+	if err != nil {
+		log.Printf("Reconciler: cleanup error: %v", err)
+		return
+	}
+	if n > 0 {
+		log.Printf("Reconciler: cleaned up %d expired pending payment(s) (>%s old)",
+			n, r.cfg.PendingMaxAge)
+	}
 }

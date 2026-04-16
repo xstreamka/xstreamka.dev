@@ -64,9 +64,10 @@ func main() {
 
 	// Checkout — принимает подписанные параметры, создаёт платёж, редирект
 	mux.HandleFunc("GET /pay/checkout", h.Checkout)
-
 	// Страница оплаты — чистый URL, безопасен для F5
 	mux.HandleFunc("GET /pay/order/{id}", h.OrderPage)
+	// Отмена платежа, возращение назад
+	mux.HandleFunc("POST /pay/order/{id}/cancel", h.CancelOrder)
 
 	// Тестовая страница — генерирует подписанную ссылку (убрать в продакшене)
 	mux.HandleFunc("GET /pay/demo", func(w http.ResponseWriter, r *http.Request) {

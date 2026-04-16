@@ -305,6 +305,45 @@ func (h *PaymentHandler) FailURL(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CancelOrder — POST /pay/order/{id}/cancel
+// Юзер нажал "Отменить" на странице оплаты. Помечаем платёж failed
+// и редиректим на return_url (= VPN-панель, /pay).
+func (h *PaymentHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	invID, err := strconv.Atoi(idStr)
+	if err != nil || invID <= 0 {
+		http.Error(w, "invalid order", http.StatusBadRequest)
+		return
+	}
+
+	// Пытаемся отменить. Если уже не pending — достаём return_url отдельно.
+	pmt, cancelErr := h.payments.CancelPending(r.Context(), invID)
+	if cancelErr != nil {
+		log.Printf("CancelOrder: inv_id=%d not cancelled (%v), lookup for redirect", invID, cancelErr)
+		if p, err := h.payments.GetByInvID(r.Context(), invID); err == nil {
+			pmt = p
+		}
+	} else {
+		log.Printf("CancelOrder: inv_id=%d cancelled by user", invID)
+	}
+
+	// Редиректим на return_url панели с пометкой cancelled
+	if pmt != nil && pmt.ReturnURL != "" {
+		sep := "?"
+		if strings.Contains(pmt.ReturnURL, "?") {
+			sep = "&"
+		}
+		url := fmt.Sprintf("%s%spayment=cancelled&inv_id=%d", pmt.ReturnURL, sep, invID)
+		http.Redirect(w, r, url, http.StatusSeeOther)
+		return
+	}
+
+	// Fallback — своя страница отмены
+	h.templates.ExecuteTemplate(w, "fail.html", map[string]any{
+		"InvID": invID,
+	})
+}
+
 // ──────────────────────────────────────────────
 // Подпись redirect-ов
 // ──────────────────────────────────────────────

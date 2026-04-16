@@ -258,3 +258,40 @@ func (p *Payment) BuildWebhookPayload() map[string]any {
 		"paid_at":      paidAt,
 	}
 }
+
+// CancelPending — пометить pending-платёж как failed (юзер нажал "Отмена").
+// Возвращает отменённый платёж или nil+err, если был уже в терминальном статусе.
+func (s *PaymentStore) CancelPending(ctx context.Context, invID int) (*Payment, error) {
+	p := &Payment{}
+	err := s.pool.QueryRow(ctx,
+		`UPDATE payments
+		 SET status = $1, updated_at = NOW()
+		 WHERE inv_id = $2 AND status = $3
+		 RETURNING id, inv_id, product_type, plan_id, amount, description, status, paid_at,
+		           callback_url, return_url, user_ref, email, metadata, created_at, updated_at`,
+		StatusFailed, invID, StatusPending,
+	).Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
+		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
+		&p.Metadata, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("cancel pending inv_id=%d: %w", invID, err)
+	}
+	return p, nil
+}
+
+// CleanupExpiredPending — для фонового cleanup-а.
+// Помечает failed все pending, созданные раньше чем olderThan назад.
+// Возвращает количество изменённых записей.
+func (s *PaymentStore) CleanupExpiredPending(ctx context.Context, olderThan time.Duration) (int64, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE payments
+		 SET status = $1, updated_at = NOW()
+		 WHERE status = $2 AND created_at < NOW() - $3::interval`,
+		StatusFailed, StatusPending,
+		fmt.Sprintf("%d seconds", int(olderThan.Seconds())),
+	)
+	if err != nil {
+		return 0, fmt.Errorf("cleanup expired pending: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}

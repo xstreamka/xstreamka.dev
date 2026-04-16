@@ -17,7 +17,8 @@
         .btn { display: block; width: 100%; padding: 0.8rem; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; text-align: center; text-decoration: none; }
         .btn-primary { background: #3b82f6; color: white; }
         .btn-primary:hover { background: #2563eb; }
-        .btn-secondary { background: transparent; color: #94a3b8; margin-top: 0.8rem; font-size: 0.9rem; }
+        .btn-secondary { background: transparent; color: #94a3b8; margin-top: 0.8rem; font-size: 0.9rem; border: none; cursor: pointer; width: 100%; }
+        .btn-secondary:hover { color: #e2e8f0; }
         .secure { text-align: center; color: #64748b; font-size: 0.8rem; margin-top: 1rem; }
     </style>
 </head>
@@ -44,6 +45,14 @@
         <div class="total">{{printf "%.0f" .Payment.Amount}} ₽</div>
 
         <a href="{{.RobokassaURL}}" class="btn btn-primary">Перейти к оплате</a>
+
+        <form method="POST" action="/pay/order/{{.Payment.InvID}}/cancel" style="margin: 0;">
+            <button type="submit" class="btn btn-secondary"
+                    onclick="return confirm('Отменить заказ и вернуться к выбору тарифа?');">
+                ← Отменить
+            </button>
+        </form>
+
         <div class="secure">🔒 Безопасная оплата через Робокассу</div>
     </div>
 </body>
