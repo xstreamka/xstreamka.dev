@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -294,4 +297,162 @@ func (s *PaymentStore) CleanupExpiredPending(ctx context.Context, olderThan time
 		return 0, fmt.Errorf("cleanup expired pending: %w", err)
 	}
 	return tag.RowsAffected(), nil
+}
+
+// ──────────── Admin ────────────
+
+type PaymentFilter struct {
+	Status         string     // "", "pending", "paid", "failed"
+	ProductType    string     // "", "vpn", ...
+	PlanID         string     // точное совпадение
+	Search         string     // substring по user_ref/email, либо exact по inv_id
+	WebhookProblem bool       // paid + не доставлено
+	From           *time.Time // >=
+	To             *time.Time // <  (created_at)
+}
+
+type PaymentStats struct {
+	CountPending   int     `json:"count_pending"`
+	CountPaid      int     `json:"count_paid"`
+	CountFailed    int     `json:"count_failed"`
+	SumPaid        float64 `json:"sum_paid"`
+	WebhookPending int     `json:"webhook_pending"` // paid, callback!="", не доставлены
+}
+
+// buildWhere — собирает WHERE + args по фильтру. Возвращает "WHERE ...", args.
+func (f PaymentFilter) buildWhere() (string, []any) {
+	var conds []string
+	var args []any
+	i := 1
+	push := func(cond string, val any) {
+		conds = append(conds, strings.ReplaceAll(cond, "$?", fmt.Sprintf("$%d", i)))
+		args = append(args, val)
+		i++
+	}
+
+	if f.Status != "" {
+		push("status = $?", f.Status)
+	}
+	if f.ProductType != "" {
+		push("product_type = $?", f.ProductType)
+	}
+	if f.PlanID != "" {
+		push("plan_id = $?", f.PlanID)
+	}
+	if f.From != nil {
+		push("created_at >= $?", *f.From)
+	}
+	if f.To != nil {
+		push("created_at < $?", *f.To)
+	}
+	if f.WebhookProblem {
+		conds = append(conds,
+			"status = 'paid' AND callback_url <> '' AND webhook_delivered_at IS NULL")
+	}
+	if s := strings.TrimSpace(f.Search); s != "" {
+		if n, err := strconv.Atoi(s); err == nil {
+			push("inv_id = $?", n)
+		} else {
+			// ILIKE по email/user_ref
+			conds = append(conds,
+				fmt.Sprintf("(email ILIKE $%d OR user_ref ILIKE $%d)", i, i+1))
+			args = append(args, "%"+s+"%", "%"+s+"%")
+			i += 2
+		}
+	}
+
+	if len(conds) == 0 {
+		return "", args
+	}
+	return "WHERE " + strings.Join(conds, " AND "), args
+}
+
+const paymentCols = `id, inv_id, product_type, plan_id, amount, description,
+	status, paid_at, callback_url, return_url, user_ref, email, metadata,
+	webhook_delivered_at, webhook_attempts, webhook_last_attempt_at, webhook_last_error,
+	created_at, updated_at`
+
+func scanPayment(row pgx.Row, p *Payment) error {
+	return row.Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
+		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email, &p.Metadata,
+		&p.WebhookDeliveredAt, &p.WebhookAttempts, &p.WebhookLastAttemptAt, &p.WebhookLastError,
+		&p.CreatedAt, &p.UpdatedAt)
+}
+
+// ListFiltered — для админки, с пагинацией.
+func (s *PaymentStore) ListFiltered(ctx context.Context, f PaymentFilter, limit, offset int) ([]Payment, int, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	where, args := f.buildWhere()
+
+	// total
+	var total int
+	if err := s.pool.QueryRow(ctx,
+		"SELECT COUNT(*) FROM payments "+where, args...,
+	).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count payments: %w", err)
+	}
+
+	// page
+	args = append(args, limit, offset)
+	rows, err := s.pool.Query(ctx,
+		fmt.Sprintf(
+			`SELECT %s FROM payments %s ORDER BY id DESC LIMIT $%d OFFSET $%d`,
+			paymentCols, where, len(args)-1, len(args),
+		),
+		args...,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list payments: %w", err)
+	}
+	defer rows.Close()
+
+	var list []Payment
+	for rows.Next() {
+		var p Payment
+		if err := scanPayment(rows, &p); err != nil {
+			return nil, 0, err
+		}
+		list = append(list, p)
+	}
+	return list, total, nil
+}
+
+// StatsFor — агрегированная статистика за период.
+// from, to опциональны (nil = без ограничения).
+func (s *PaymentStore) StatsFor(ctx context.Context, from, to *time.Time) (*PaymentStats, error) {
+	var where []string
+	var args []any
+	if from != nil {
+		where = append(where, fmt.Sprintf("created_at >= $%d", len(args)+1))
+		args = append(args, *from)
+	}
+	if to != nil {
+		where = append(where, fmt.Sprintf("created_at < $%d", len(args)+1))
+		args = append(args, *to)
+	}
+	whereSQL := ""
+	if len(where) > 0 {
+		whereSQL = "WHERE " + strings.Join(where, " AND ")
+	}
+
+	st := &PaymentStats{}
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'pending'),
+			COUNT(*) FILTER (WHERE status = 'paid'),
+			COUNT(*) FILTER (WHERE status = 'failed'),
+			COALESCE(SUM(amount) FILTER (WHERE status = 'paid'), 0),
+			COUNT(*) FILTER (WHERE status = 'paid' AND callback_url <> '' AND webhook_delivered_at IS NULL)
+		FROM payments %s`, whereSQL), args...,
+	).Scan(&st.CountPending, &st.CountPaid, &st.CountFailed, &st.SumPaid, &st.WebhookPending)
+	if err != nil {
+		return nil, fmt.Errorf("stats: %w", err)
+	}
+	return st, nil
 }

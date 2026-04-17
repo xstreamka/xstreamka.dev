@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Платежи — pay-service admin</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0f172a; color:#e2e8f0; padding:1rem; font-size:14px; }
+a { color:#38bdf8; text-decoration:none; }
+a:hover { text-decoration:underline; }
+h1 { margin-bottom:1rem; font-size:1.4rem; }
+.container { max-width:1400px; margin:0 auto; }
+.card { background:#1e293b; border-radius:10px; padding:1rem; margin-bottom:1rem; }
+
+/* Stats */
+.stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.8rem; }
+.stat-box { background:#0f172a; border:1px solid #334155; border-radius:8px; padding:0.8rem; }
+.stat-box .label { color:#94a3b8; font-size:0.8rem; text-transform:uppercase; letter-spacing:0.05em; }
+.stat-box .value { font-size:1.5rem; font-weight:700; margin-top:0.2rem; }
+.stat-box.paid   .value { color:#22c55e; }
+.stat-box.pending .value { color:#f59e0b; }
+.stat-box.failed  .value { color:#ef4444; }
+.stat-box.webhook .value { color:#a78bfa; }
+
+/* Filter form */
+.filters { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.5rem; align-items:end; }
+.filters label { display:block; color:#94a3b8; font-size:0.75rem; margin-bottom:0.2rem; text-transform:uppercase; letter-spacing:0.05em; }
+.filters input, .filters select { width:100%; padding:0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.9rem; }
+.filters input:focus, .filters select:focus { outline:none; border-color:#38bdf8; }
+.filters .actions { display:flex; gap:0.4rem; }
+.btn { padding:0.5rem 0.9rem; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem; background:#334155; color:#e2e8f0; text-decoration:none; display:inline-block; }
+.btn-primary { background:#3b82f6; }
+.btn-primary:hover { background:#2563eb; }
+.btn:hover { background:#475569; text-decoration:none; }
+
+/* Table */
+table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+th { text-align:left; padding:0.6rem 0.5rem; border-bottom:1px solid #334155; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; font-size:0.72rem; }
+td { padding:0.6rem 0.5rem; border-bottom:1px solid #1e293b; vertical-align:middle; }
+tr:hover td { background:#0f172a; }
+.mono { font-family:'SF Mono',Menlo,Consolas,monospace; font-size:0.82rem; }
+.muted { color:#64748b; }
+
+.badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+.badge-paid    { background:#0f2a1c; color:#22c55e; border:1px solid #166534; }
+.badge-pending { background:#2a220f; color:#f59e0b; border:1px solid #78350f; }
+.badge-failed  { background:#2a0f0f; color:#ef4444; border:1px solid #7f1d1d; }
+.badge-webhook { background:#1a0f2a; color:#a78bfa; border:1px solid #4c1d95; margin-left:0.3rem; }
+
+.amount { font-weight:600; text-align:right; font-variant-numeric:tabular-nums; }
+
+/* Pagination */
+.pager { display:flex; gap:0.3rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
+.pager a, .pager span { padding:0.4rem 0.7rem; border-radius:6px; background:#1e293b; border:1px solid #334155; font-size:0.85rem; }
+.pager .current { background:#3b82f6; border-color:#3b82f6; color:white; }
+.pager .dots { border:none; background:transparent; }
+
+.empty { text-align:center; padding:3rem 1rem; color:#64748b; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>💳 Платежи — сверка</h1>
+
+<!-- Stats -->
+<div class="card">
+  <div class="stats">
+    <div class="stat-box paid">
+      <div class="label">Оплачено</div>
+      <div class="value">{{.Stats.CountPaid}}</div>
+      <div class="muted mono">{{printf "%.2f" .Stats.SumPaid}} ₽</div>
+    </div>
+    <div class="stat-box pending">
+      <div class="label">В ожидании</div>
+      <div class="value">{{.Stats.CountPending}}</div>
+    </div>
+    <div class="stat-box failed">
+      <div class="label">Неудачных</div>
+      <div class="value">{{.Stats.CountFailed}}</div>
+    </div>
+    <div class="stat-box webhook">
+      <div class="label">Webhook не дошёл</div>
+      <div class="value">{{.Stats.WebhookPending}}</div>
+      {{if gt .Stats.WebhookPending 0}}
+        <a href="?webhook_problem=1&period={{.Period}}" class="muted" style="font-size:0.75rem;">показать →</a>
+      {{end}}
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card">
+  <form method="GET" action="/admin/payments" class="filters">
+    <div>
+      <label>Период</label>
+      <select name="period">
+        <option value="today" {{if eq .Period "today"}}selected{{end}}>Сегодня</option>
+        <option value="7d"    {{if eq .Period "7d"}}selected{{end}}>7 дней</option>
+        <option value="30d"   {{if eq .Period "30d"}}selected{{end}}>30 дней</option>
+        <option value="90d"   {{if eq .Period "90d"}}selected{{end}}>90 дней</option>
+        <option value="all"   {{if eq .Period "all"}}selected{{end}}>Всё</option>
+      </select>
+    </div>
+    <div>
+      <label>Статус</label>
+      <select name="status">
+        <option value="">— все —</option>
+        <option value="pending" {{if eq .Filter.Status "pending"}}selected{{end}}>pending</option>
+        <option value="paid"    {{if eq .Filter.Status "paid"}}selected{{end}}>paid</option>
+        <option value="failed"  {{if eq .Filter.Status "failed"}}selected{{end}}>failed</option>
+      </select>
+    </div>
+    <div>
+      <label>Продукт</label>
+      <input type="text" name="product_type" value="{{.Filter.ProductType}}" placeholder="vpn">
+    </div>
+    <div>
+      <label>Тариф (plan_id)</label>
+      <input type="text" name="plan_id" value="{{.Filter.PlanID}}" placeholder="basic_10">
+    </div>
+    <div style="grid-column: span 2;">
+      <label>Поиск (InvID / email / user_ref)</label>
+      <input type="text" name="search" value="{{.Filter.Search}}" placeholder="42, user@example.com, 7">
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Применить</button>
+      <a href="/admin/payments" class="btn">Сброс</a>
+    </div>
+    {{if .Filter.WebhookProblem}}
+      <input type="hidden" name="webhook_problem" value="1">
+    {{end}}
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+    <div class="muted">Найдено: <strong style="color:#e2e8f0;">{{.Total}}</strong></div>
+    <div class="muted" style="font-size:0.8rem;">{{.Page}} / {{.TotalPages}}</div>
+  </div>
+
+  {{if .Payments}}
+  <table>
+    <thead>
+      <tr>
+        <th style="width:70px;">InvID</th>
+        <th style="width:140px;">Создан</th>
+        <th>Тариф</th>
+        <th>Email / user_ref</th>
+        <th style="width:90px; text-align:right;">Сумма</th>
+        <th style="width:90px;">Статус</th>
+        <th style="width:120px;">Webhook</th>
+        <th style="width:50px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {{range .Payments}}
+      <tr>
+        <td class="mono"><a href="/admin/payments/{{.InvID}}">#{{.InvID}}</a></td>
+        <td class="muted mono">{{.CreatedAt.Format "02.01 15:04"}}</td>
+        <td>
+          <div>{{.PlanID}}</div>
+          <div class="muted" style="font-size:0.75rem;">{{.ProductType}}</div>
+        </td>
+        <td>
+          <div>{{if .Email}}{{.Email}}{{else}}<span class="muted">—</span>{{end}}</div>
+          <div class="muted mono" style="font-size:0.75rem;">ref: {{.UserRef}}</div>
+        </td>
+        <td class="amount">{{printf "%.2f" .Amount}} ₽</td>
+        <td>
+          {{if eq (printf "%s" .Status) "paid"}}<span class="badge badge-paid">paid</span>{{end}}
+          {{if eq (printf "%s" .Status) "pending"}}<span class="badge badge-pending">pending</span>{{end}}
+          {{if eq (printf "%s" .Status) "failed"}}<span class="badge badge-failed">failed</span>{{end}}
+        </td>
+        <td>
+          {{if eq (printf "%s" .Status) "paid"}}
+            {{if ne .CallbackURL ""}}
+              {{if .WebhookDeliveredAt}}
+                <span class="muted" style="font-size:0.78rem;">✓ доставлен</span>
+              {{else}}
+                <span class="badge badge-failed">не дошёл</span>
+                <div class="muted" style="font-size:0.72rem;">попыток: {{.WebhookAttempts}}</div>
+              {{end}}
+            {{else}}
+              <span class="muted" style="font-size:0.78rem;">—</span>
+            {{end}}
+          {{else}}
+            <span class="muted">—</span>
+          {{end}}
+        </td>
+        <td><a href="/admin/payments/{{.InvID}}" class="btn" style="padding:3px 8px; font-size:0.75rem;">→</a></td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{else}}
+    <div class="empty">Ничего не найдено под выбранные фильтры.</div>
+  {{end}}
+</div>
+
+<!-- Pagination -->
+{{if gt .TotalPages 1}}
+<div class="pager">
+  {{if gt .Page 1}}
+    <a href="?{{.QueryString}}&page={{.PrevPage}}">← назад</a>
+  {{end}}
+  <span class="current">{{.Page}}</span>
+  <span class="dots">из {{.TotalPages}}</span>
+  {{if lt .Page .TotalPages}}
+    <a href="?{{.QueryString}}&page={{.NextPage}}">вперёд →</a>
+  {{end}}
+</div>
+{{end}}
+
+</div>
+</body>
+</html>

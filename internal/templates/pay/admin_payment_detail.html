@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Платёж #{{.P.InvID}} — admin</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0f172a; color:#e2e8f0; padding:1rem; font-size:14px; }
+a { color:#38bdf8; text-decoration:none; }
+a:hover { text-decoration:underline; }
+.container { max-width:1000px; margin:0 auto; }
+.card { background:#1e293b; border-radius:10px; padding:1.2rem; margin-bottom:1rem; }
+.mono { font-family:'SF Mono',Menlo,Consolas,monospace; font-size:0.85rem; }
+.muted { color:#94a3b8; }
+
+h1 { font-size:1.3rem; margin-bottom:0.3rem; }
+h2 { font-size:1rem; margin-bottom:0.8rem; text-transform:uppercase; letter-spacing:0.05em; color:#94a3b8; font-weight:600; }
+
+.back { color:#38bdf8; font-size:0.85rem; display:inline-block; margin-bottom:0.8rem; }
+
+.flash { padding:0.8rem 1rem; border-radius:8px; margin-bottom:1rem; font-size:0.9rem; }
+.flash-ok   { background:#0f2a1c; color:#86efac; border:1px solid #166534; }
+.flash-err  { background:#2a0f0f; color:#fca5a5; border:1px solid #7f1d1d; }
+.flash-warn { background:#2a220f; color:#fcd34d; border:1px solid #78350f; }
+
+.badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; }
+.badge-paid    { background:#0f2a1c; color:#22c55e; border:1px solid #166534; }
+.badge-pending { background:#2a220f; color:#f59e0b; border:1px solid #78350f; }
+.badge-failed  { background:#2a0f0f; color:#ef4444; border:1px solid #7f1d1d; }
+
+dl { display:grid; grid-template-columns:200px 1fr; gap:0.5rem 1rem; }
+dt { color:#94a3b8; font-size:0.82rem; padding-top:2px; }
+dd { word-break:break-all; }
+
+pre { background:#0f172a; border:1px solid #334155; border-radius:6px; padding:0.8rem; overflow-x:auto; font-size:0.8rem; line-height:1.5; color:#cbd5e1; }
+
+.btn { display:inline-block; padding:0.55rem 1rem; border:none; border-radius:6px; cursor:pointer; font-size:0.88rem; background:#334155; color:#e2e8f0; text-decoration:none; }
+.btn-primary { background:#3b82f6; }
+.btn-primary:hover { background:#2563eb; text-decoration:none; }
+.btn-danger { background:#dc2626; }
+.btn-danger:hover { background:#b91c1c; text-decoration:none; }
+
+.actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:1rem; }
+
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+@media (max-width:700px) { .grid-2 { grid-template-columns:1fr; } dl { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a href="/admin/payments" class="back">← к списку</a>
+
+<!-- Flash -->
+{{if eq .Flash "retry_ok"}}
+  <div class="flash flash-ok">✓ Webhook успешно доставлен.</div>
+{{else if eq .Flash "retry_failed"}}
+  <div class="flash flash-err">✗ Повторная отправка webhook не удалась. Смотри webhook_last_error ниже.</div>
+{{else if eq .Flash "only_paid"}}
+  <div class="flash flash-warn">Webhook можно переотправить только для платежей в статусе paid.</div>
+{{else if eq .Flash "no_callback"}}
+  <div class="flash flash-warn">У этого платежа не задан callback_url — переотправлять некуда.</div>
+{{end}}
+
+<!-- Header -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+    <div>
+      <h1 class="mono">Платёж #{{.P.InvID}}</h1>
+      <div class="muted">
+        {{.P.ProductType}} / {{.P.PlanID}} — {{printf "%.2f" .P.Amount}} ₽
+      </div>
+    </div>
+    <div>
+      {{if eq (printf "%s" .P.Status) "paid"}}<span class="badge badge-paid">paid</span>{{end}}
+      {{if eq (printf "%s" .P.Status) "pending"}}<span class="badge badge-pending">pending</span>{{end}}
+      {{if eq (printf "%s" .P.Status) "failed"}}<span class="badge badge-failed">failed</span>{{end}}
+    </div>
+  </div>
+</div>
+
+<div class="grid-2">
+
+  <!-- Payment info -->
+  <div class="card">
+    <h2>Платёж</h2>
+    <dl>
+      <dt>InvID</dt>                 <dd class="mono">{{.P.InvID}}</dd>
+      <dt>Сумма</dt>                 <dd>{{printf "%.2f" .P.Amount}} ₽</dd>
+      <dt>Описание</dt>              <dd>{{.P.Description}}</dd>
+      <dt>Product</dt>               <dd class="mono">{{.P.ProductType}}</dd>
+      <dt>Plan</dt>                  <dd class="mono">{{.P.PlanID}}</dd>
+      <dt>user_ref</dt>              <dd class="mono">{{.P.UserRef}}</dd>
+      <dt>Email</dt>                 <dd>{{if .P.Email}}{{.P.Email}}{{else}}<span class="muted">—</span>{{end}}</dd>
+      <dt>Создан</dt>                <dd class="mono">{{.P.CreatedAt.Format "02.01.2006 15:04:05"}}</dd>
+      <dt>Обновлён</dt>              <dd class="mono">{{.P.UpdatedAt.Format "02.01.2006 15:04:05"}}</dd>
+      <dt>Оплачен</dt>
+      <dd>
+        {{if .P.PaidAt}}<span class="mono">{{.P.PaidAt.Format "02.01.2006 15:04:05"}}</span>
+        {{else}}<span class="muted">—</span>{{end}}
+      </dd>
+    </dl>
+  </div>
+
+  <!-- Webhook info -->
+  <div class="card">
+    <h2>Webhook</h2>
+    <dl>
+      <dt>callback_url</dt>
+      <dd class="mono" style="font-size:0.78rem;">
+        {{if .P.CallbackURL}}{{.P.CallbackURL}}{{else}}<span class="muted">—</span>{{end}}
+      </dd>
+
+      <dt>return_url</dt>
+      <dd class="mono" style="font-size:0.78rem;">
+        {{if .P.ReturnURL}}{{.P.ReturnURL}}{{else}}<span class="muted">—</span>{{end}}
+      </dd>
+
+      <dt>Статус</dt>
+      <dd>
+        {{if eq (printf "%s" .P.Status) "paid"}}
+          {{if .P.CallbackURL}}
+            {{if .P.WebhookDeliveredAt}}
+              <span class="badge badge-paid">доставлен</span>
+            {{else}}
+              <span class="badge badge-failed">не доставлен</span>
+            {{end}}
+          {{else}}
+            <span class="muted">callback не задан</span>
+          {{end}}
+        {{else}}
+          <span class="muted">платёж не оплачен</span>
+        {{end}}
+      </dd>
+
+      <dt>Попыток</dt>
+      <dd class="mono">{{.P.WebhookAttempts}}</dd>
+
+      <dt>Доставлен</dt>
+      <dd class="mono">{{if .P.WebhookDeliveredAt}}{{.P.WebhookDeliveredAt.Format "02.01.2006 15:04:05"}}{{else}}<span class="muted">—</span>{{end}}</dd>
+
+      <dt>Посл. попытка</dt>
+      <dd class="mono">{{if .P.WebhookLastAttemptAt}}{{.P.WebhookLastAttemptAt.Format "02.01.2006 15:04:05"}}{{else}}<span class="muted">—</span>{{end}}</dd>
+
+      <dt>Посл. ошибка</dt>
+      <dd>
+        {{if .P.WebhookLastError}}
+          <pre style="margin:0; white-space:pre-wrap;">{{.P.WebhookLastError}}</pre>
+        {{else}}
+          <span class="muted">—</span>
+        {{end}}
+      </dd>
+    </dl>
+
+    {{if and (eq (printf "%s" .P.Status) "paid") (ne .P.CallbackURL "")}}
+    <div class="actions">
+      <form method="POST" action="/admin/payments/{{.P.InvID}}/retry-webhook" style="margin:0;"
+            onsubmit="return confirm('Переотправить webhook в {{.P.CallbackURL}}?');">
+        <button type="submit" class="btn btn-primary">↻ Переотправить webhook</button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+
+</div>
+
+<!-- Metadata -->
+<div class="card">
+  <h2>Metadata (JSON)</h2>
+  {{if .MetaPretty}}
+    <pre>{{.MetaPretty}}</pre>
+  {{else}}
+    <p class="muted">Пусто.</p>
+  {{end}}
+</div>
+
+<!-- External links -->
+<div class="card">
+  <h2>Внешние ссылки</h2>
+  <div class="actions">
+    <a href="{{.RobokassaURL}}" target="_blank" rel="noopener" class="btn">
+      Операции в ЛК Робокассы ↗
+    </a>
+    {{if .P.ReturnURL}}
+      <a href="{{.P.ReturnURL}}" target="_blank" rel="noopener" class="btn">
+        return_url ↗
+      </a>
+    {{end}}
+  </div>
+  <p class="muted" style="font-size:0.78rem; margin-top:0.6rem;">
+    В ЛК Робокассы фильтруй по InvID <span class="mono">{{.P.InvID}}</span> на странице «Операции».
+  </p>
+</div>
+
+</div>
+</body>
+</html>

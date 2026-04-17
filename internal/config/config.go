@@ -29,6 +29,10 @@ type Config struct {
 
 	// URL лендинга (для шаблонов)
 	SiteURL string
+
+	// Admin UI
+	AdminUser     string
+	AdminPassword string
 }
 
 func Load() (*Config, error) {
@@ -51,6 +55,9 @@ func Load() (*Config, error) {
 
 		WebhookSecret: getEnv("WEBHOOK_SECRET", ""),
 		SiteURL:       getEnv("SITE_URL", "https://xstreamka.dev"),
+
+		AdminUser:     getEnv("ADMIN_USER", ""),
+		AdminPassword: getEnv("ADMIN_PASSWORD", ""),
 	}
 
 	if cfg.DBPass == "" {
@@ -61,6 +68,12 @@ func Load() (*Config, error) {
 	}
 	if cfg.WebhookSecret == "" {
 		return nil, fmt.Errorf("WEBHOOK_SECRET is required")
+	}
+	if cfg.AdminUser == "" {
+		return nil, fmt.Errorf("ADMIN_USER is required")
+	}
+	if cfg.AdminPassword == "" {
+		return nil, fmt.Errorf("ADMIN_PASSWORD is required")
 	}
 
 	return cfg, nil

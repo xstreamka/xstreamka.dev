@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"pay-service/internal/middleware"
 	"pay-service/internal/reconciler"
 	"syscall"
 	"time"
@@ -61,6 +62,16 @@ func main() {
 	h := handlers.NewPaymentHandler(paymentStore, robokassa, webhookSender, cfg.WebhookSecret, cfg.SiteURL, tmpl)
 
 	mux := http.NewServeMux()
+
+	// ─── Admin UI ───
+	adminH := handlers.NewAdminHandler(paymentStore, webhookSender, tmpl)
+	auth := middleware.BasicAuth("pay-service admin", cfg.AdminUser, cfg.AdminPassword)
+
+	mux.Handle("GET /admin/payments", auth(http.HandlerFunc(adminH.Payments)))
+	mux.Handle("GET /admin/payments/{inv_id}", auth(http.HandlerFunc(adminH.PaymentDetail)))
+	mux.Handle("POST /admin/payments/{inv_id}/retry-webhook", auth(http.HandlerFunc(adminH.RetryWebhook)))
+
+	log.Println("Admin UI enabled at /admin/payments")
 
 	// Checkout — принимает подписанные параметры, создаёт платёж, редирект
 	mux.HandleFunc("GET /pay/checkout", h.Checkout)

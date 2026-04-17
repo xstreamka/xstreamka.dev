@@ -38,6 +38,8 @@ services:
       ROBOKASSA_HASH_ALGO: ${ROBOKASSA_HASH_ALGO:-md5}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       SITE_URL: ${SITE_URL:-https://xstreamka.dev}
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
 
 volumes:
   pgdata:
