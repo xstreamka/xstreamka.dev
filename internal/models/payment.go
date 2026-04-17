@@ -109,15 +109,9 @@ func (s *PaymentStore) MarkFailed(ctx context.Context, invID int) error {
 // GetByInvID находит платёж по InvId.
 func (s *PaymentStore) GetByInvID(ctx context.Context, invID int) (*Payment, error) {
 	p := &Payment{}
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, inv_id, product_type, plan_id, amount, description, status, paid_at,
-		        callback_url, return_url, user_ref, email, metadata, created_at, updated_at
-		 FROM payments WHERE inv_id = $1`,
-		invID,
-	).Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
-		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
-		&p.Metadata, &p.CreatedAt, &p.UpdatedAt)
-	if err != nil {
+	row := s.pool.QueryRow(ctx,
+		`SELECT `+paymentCols+` FROM payments WHERE inv_id = $1`, invID)
+	if err := scanPayment(row, p); err != nil {
 		return nil, fmt.Errorf("payment not found: inv_id=%d", invID)
 	}
 	return p, nil
@@ -127,19 +121,15 @@ func (s *PaymentStore) GetByInvID(ctx context.Context, invID int) (*Payment, err
 // Если найден — возвращаем его вместо создания дубля.
 func (s *PaymentStore) FindPending(ctx context.Context, userRef, planID string, amount float64) (*Payment, error) {
 	p := &Payment{}
-	err := s.pool.QueryRow(ctx,
-		`SELECT id, inv_id, product_type, plan_id, amount, description, status, paid_at,
-		        callback_url, return_url, user_ref, email, metadata, created_at, updated_at
-		 FROM payments
+	row := s.pool.QueryRow(ctx,
+		`SELECT `+paymentCols+` FROM payments
 		 WHERE user_ref = $1 AND plan_id = $2 AND amount = $3
 		   AND status = 'pending'
 		   AND created_at > NOW() - INTERVAL '30 minutes'
 		 ORDER BY id DESC LIMIT 1`,
 		userRef, planID, amount,
-	).Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
-		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
-		&p.Metadata, &p.CreatedAt, &p.UpdatedAt)
-	if err != nil {
+	)
+	if err := scanPayment(row, p); err != nil {
 		return nil, err
 	}
 	return p, nil
@@ -148,9 +138,7 @@ func (s *PaymentStore) FindPending(ctx context.Context, userRef, planID string, 
 // ListAll — все платежи (для админки).
 func (s *PaymentStore) ListAll(ctx context.Context, limit int) ([]Payment, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, inv_id, product_type, plan_id, amount, description, status, paid_at,
-		        callback_url, return_url, user_ref, email, metadata, created_at, updated_at
-		 FROM payments ORDER BY id DESC LIMIT $1`, limit,
+		`SELECT `+paymentCols+` FROM payments ORDER BY id DESC LIMIT $1`, limit,
 	)
 	if err != nil {
 		return nil, err
