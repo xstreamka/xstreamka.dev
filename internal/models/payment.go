@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -40,6 +42,16 @@ type Payment struct {
 	WebhookAttempts      int             `json:"webhook_attempts"`
 	WebhookLastAttemptAt *time.Time      `json:"webhook_last_attempt_at,omitempty"`
 	WebhookLastError     *string         `json:"webhook_last_error,omitempty"`
+	AccessToken          string          `json:"-"`
+}
+
+// generateAccessToken — 32 случайных байта, base64url без padding (43 символа).
+func generateAccessToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 type PaymentStore struct {
@@ -51,17 +63,25 @@ func NewPaymentStore(pool *pgxpool.Pool) *PaymentStore {
 }
 
 // Create создаёт платёж. InvID = ID (autoincrement, уникальный).
+// Одновременно генерирует access_token, который служит proof-of-ownership
+// для страницы /pay/order/{inv_id}.
 func (s *PaymentStore) Create(ctx context.Context, p *Payment) (*Payment, error) {
 	if p.Metadata == nil {
 		p.Metadata = json.RawMessage(`{}`)
 	}
 
-	err := s.pool.QueryRow(ctx,
-		`INSERT INTO payments (product_type, plan_id, amount, description, callback_url, return_url, user_ref, email, metadata)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	token, err := generateAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate access token: %w", err)
+	}
+	p.AccessToken = token
+
+	err = s.pool.QueryRow(ctx,
+		`INSERT INTO payments (product_type, plan_id, amount, description, callback_url, return_url, user_ref, email, metadata, access_token)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING id, product_type, plan_id, amount, description, status, callback_url, return_url, user_ref, email, metadata, created_at, updated_at`,
 		p.ProductType, p.PlanID, p.Amount, p.Description,
-		p.CallbackURL, p.ReturnURL, p.UserRef, p.Email, p.Metadata,
+		p.CallbackURL, p.ReturnURL, p.UserRef, p.Email, p.Metadata, p.AccessToken,
 	).Scan(&p.ID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
 		&p.Status, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
 		&p.Metadata, &p.CreatedAt, &p.UpdatedAt)
@@ -86,11 +106,11 @@ func (s *PaymentStore) MarkPaid(ctx context.Context, invID int) (*Payment, error
 		`UPDATE payments SET status = $1, paid_at = NOW(), updated_at = NOW()
 		 WHERE inv_id = $2 AND status = $3
 		 RETURNING id, inv_id, product_type, plan_id, amount, description, status, paid_at,
-		           callback_url, return_url, user_ref, email, metadata, created_at, updated_at`,
+		           callback_url, return_url, user_ref, email, metadata, created_at, updated_at, access_token`,
 		StatusPaid, invID, StatusPending,
 	).Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
 		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
-		&p.Metadata, &p.CreatedAt, &p.UpdatedAt)
+		&p.Metadata, &p.CreatedAt, &p.UpdatedAt, &p.AccessToken)
 	if err != nil {
 		return nil, fmt.Errorf("mark paid inv_id=%d: %w", invID, err)
 	}
@@ -148,9 +168,7 @@ func (s *PaymentStore) ListAll(ctx context.Context, limit int) ([]Payment, error
 	var payments []Payment
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
-			&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
-			&p.Metadata, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := scanPayment(rows, &p); err != nil {
 			return nil, err
 		}
 		payments = append(payments, p)
@@ -194,11 +212,6 @@ func (s *PaymentStore) MarkWebhookFailed(ctx context.Context, invID int, errMsg 
 // retryAfter: не повторять, если последняя попытка была раньше этого интервала.
 // maxAge: платежи старше этого возраста игнорируем (считаем safer фейлом).
 func (s *PaymentStore) ListPendingWebhooks(ctx context.Context, retryAfter, maxAge time.Duration, limit int) ([]Payment, error) {
-	const paymentCols = `id, inv_id, product_type, plan_id, amount, description,
-                     status, paid_at, callback_url, return_url, user_ref, email,
-                     metadata, webhook_delivered_at, webhook_attempts,
-                     webhook_last_attempt_at, webhook_last_error,
-                     created_at, updated_at`
 	rows, err := s.pool.Query(ctx,
 		`SELECT `+paymentCols+`
 		 FROM payments
@@ -221,9 +234,7 @@ func (s *PaymentStore) ListPendingWebhooks(ctx context.Context, retryAfter, maxA
 	var list []Payment
 	for rows.Next() {
 		var p Payment
-		if err := rows.Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount,
-			&p.Description, &p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL,
-			&p.UserRef, &p.Email, &p.Metadata, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := scanPayment(rows, &p); err != nil {
 			return nil, err
 		}
 		list = append(list, p)
@@ -259,11 +270,11 @@ func (s *PaymentStore) CancelPending(ctx context.Context, invID int) (*Payment, 
 		 SET status = $1, updated_at = NOW()
 		 WHERE inv_id = $2 AND status = $3
 		 RETURNING id, inv_id, product_type, plan_id, amount, description, status, paid_at,
-		           callback_url, return_url, user_ref, email, metadata, created_at, updated_at`,
+		           callback_url, return_url, user_ref, email, metadata, created_at, updated_at, access_token`,
 		StatusFailed, invID, StatusPending,
 	).Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
 		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email,
-		&p.Metadata, &p.CreatedAt, &p.UpdatedAt)
+		&p.Metadata, &p.CreatedAt, &p.UpdatedAt, &p.AccessToken)
 	if err != nil {
 		return nil, fmt.Errorf("cancel pending inv_id=%d: %w", invID, err)
 	}
@@ -358,13 +369,13 @@ func (f PaymentFilter) buildWhere() (string, []any) {
 const paymentCols = `id, inv_id, product_type, plan_id, amount, description,
 	status, paid_at, callback_url, return_url, user_ref, email, metadata,
 	webhook_delivered_at, webhook_attempts, webhook_last_attempt_at, webhook_last_error,
-	created_at, updated_at`
+	created_at, updated_at, access_token`
 
 func scanPayment(row pgx.Row, p *Payment) error {
 	return row.Scan(&p.ID, &p.InvID, &p.ProductType, &p.PlanID, &p.Amount, &p.Description,
 		&p.Status, &p.PaidAt, &p.CallbackURL, &p.ReturnURL, &p.UserRef, &p.Email, &p.Metadata,
 		&p.WebhookDeliveredAt, &p.WebhookAttempts, &p.WebhookLastAttemptAt, &p.WebhookLastError,
-		&p.CreatedAt, &p.UpdatedAt)
+		&p.CreatedAt, &p.UpdatedAt, &p.AccessToken)
 }
 
 // ListFiltered — для админки, с пагинацией.
