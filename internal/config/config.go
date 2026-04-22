@@ -31,8 +31,10 @@ type Config struct {
 	SiteURL string
 
 	// Admin UI
-	AdminUser     string
-	AdminPassword string
+	AdminUser         string
+	AdminPassword     string // plaintext fallback (для миграции)
+	AdminPasswordHash string // bcrypt, предпочтительный вариант
+	SessionSecret     string // HMAC-ключ для session-cookie (>= 32 байт)
 }
 
 func Load() (*Config, error) {
@@ -56,8 +58,10 @@ func Load() (*Config, error) {
 		WebhookSecret: getEnv("WEBHOOK_SECRET", ""),
 		SiteURL:       getEnv("SITE_URL", "https://xstreamka.dev"),
 
-		AdminUser:     getEnv("ADMIN_USER", ""),
-		AdminPassword: getEnv("ADMIN_PASSWORD", ""),
+		AdminUser:         getEnv("ADMIN_USER", ""),
+		AdminPassword:     getEnv("ADMIN_PASSWORD", ""),
+		AdminPasswordHash: getEnv("ADMIN_PASSWORD_HASH", ""),
+		SessionSecret:     getEnv("SESSION_SECRET", ""),
 	}
 
 	if cfg.DBPass == "" {
@@ -72,8 +76,14 @@ func Load() (*Config, error) {
 	if cfg.AdminUser == "" {
 		return nil, fmt.Errorf("ADMIN_USER is required")
 	}
-	if cfg.AdminPassword == "" {
-		return nil, fmt.Errorf("ADMIN_PASSWORD is required")
+	if cfg.AdminPassword == "" && cfg.AdminPasswordHash == "" {
+		return nil, fmt.Errorf("ADMIN_PASSWORD or ADMIN_PASSWORD_HASH is required")
+	}
+	if cfg.SessionSecret == "" {
+		return nil, fmt.Errorf("SESSION_SECRET is required (generate: openssl rand -hex 32)")
+	}
+	if len(cfg.SessionSecret) < 32 {
+		return nil, fmt.Errorf("SESSION_SECRET must be at least 32 chars")
 	}
 
 	return cfg, nil

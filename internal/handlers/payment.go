@@ -20,6 +20,44 @@ import (
 	"pay-service/internal/payment"
 )
 
+// Длительность жизни access-cookie. Чуть больше TTL pending-платежа (30 мин),
+// чтобы юзер, вернувшийся со страницы Робокассы, застал валидную cookie.
+const orderAccessTTL = time.Hour
+
+// orderAccessCookieName — имя cookie для конкретного заказа.
+// Per-inv_id, чтобы параллельные оплаты с одного браузера не конфликтовали.
+func orderAccessCookieName(invID int) string {
+	return fmt.Sprintf("pay_token_%d", invID)
+}
+
+// setOrderAccessCookie выставляет httpOnly cookie с токеном для данного заказа.
+func setOrderAccessCookie(w http.ResponseWriter, r *http.Request, invID int, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     orderAccessCookieName(invID),
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(orderAccessTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// checkOrderAccess возвращает true, если запрос аутентифицирован на заказ invID.
+// Источник токена — только cookie pay_token_{invID}, выставленная на этапе
+// checkout. Constant-time сравнение через hmac.Equal. Токен нигде не
+// появляется в URL, логах и Referer.
+func checkOrderAccess(r *http.Request, invID int, expected string) bool {
+	if expected == "" {
+		return false
+	}
+	ck, err := r.Cookie(orderAccessCookieName(invID))
+	if err != nil {
+		return false
+	}
+	return hmac.Equal([]byte(ck.Value), []byte(expected))
+}
+
 type PaymentHandler struct {
 	payments  *models.PaymentStore
 	robokassa *payment.Robokassa
@@ -122,12 +160,21 @@ func (h *PaymentHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Checkout: reusing existing inv_id=%d", pmt.InvID)
 	}
 
-	// 5. Редирект на чистый URL — F5 просто перечитает страницу из БД
-	http.Redirect(w, r, fmt.Sprintf("/pay/order/%d", pmt.InvID), http.StatusSeeOther)
+	// 5. Выставляем cookie с access-token и редиректим на чистый URL.
+	// Cookie отправляется в том же 303-ответе — браузер применит её до GET-а
+	// на /pay/order/{id}, так что токен нигде не светится в адресной строке,
+	// истории, логах и Referer.
+	setOrderAccessCookie(w, r, pmt.InvID, pmt.AccessToken)
+	http.Redirect(w, r,
+		fmt.Sprintf("/pay/order/%d", pmt.InvID),
+		http.StatusSeeOther)
 }
 
 // OrderPage показывает страницу оплаты по inv_id. Безопасен для F5.
 // GET /pay/order/{id}
+// Требует cookie pay_token_{id}, совпадающую с access_token заказа
+// (выставляется на этапе /pay/checkout). Без cookie — 404 (не 403/401),
+// чтобы не подтверждать существование inv_id перебором.
 func (h *PaymentHandler) OrderPage(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	invID, err := strconv.Atoi(idStr)
@@ -138,6 +185,11 @@ func (h *PaymentHandler) OrderPage(w http.ResponseWriter, r *http.Request) {
 
 	pmt, err := h.payments.GetByInvID(r.Context(), invID)
 	if err != nil {
+		http.Error(w, "order not found", http.StatusNotFound)
+		return
+	}
+
+	if !checkOrderAccess(r, invID, pmt.AccessToken) {
 		http.Error(w, "order not found", http.StatusNotFound)
 		return
 	}
@@ -253,66 +305,96 @@ func (h *PaymentHandler) sendWebhook(pmt *models.Payment) {
 
 // SuccessURL — пользователь вернулся после оплаты.
 // GET /payments/success
+// Робокасса не знает наш access-token, поэтому ориентируемся на cookie
+// pay_token_{InvId}, которую браузер сохранил на этапе checkout.
+// Без совпадения cookie → показываем нейтральную страницу без утечки inv_id.
 func (h *PaymentHandler) SuccessURL(w http.ResponseWriter, r *http.Request) {
 	invIDStr := r.FormValue("InvId")
 	invID, _ := strconv.Atoi(invIDStr)
 
 	if invID > 0 {
 		pmt, err := h.payments.GetByInvID(r.Context(), invID)
-		if err == nil && pmt.ReturnURL != "" {
-			// Редиректим пользователя обратно на VPN-панель
-			sep := "?"
-			if strings.Contains(pmt.ReturnURL, "?") {
-				sep = "&"
-			}
-			redirectURL := fmt.Sprintf("%s%spayment=success&inv_id=%d", pmt.ReturnURL, sep, invID)
+		if err == nil && checkOrderAccess(r, invID, pmt.AccessToken) {
+			if pmt.ReturnURL != "" {
+				// Редиректим пользователя обратно на VPN-панель
+				sep := "?"
+				if strings.Contains(pmt.ReturnURL, "?") {
+					sep = "&"
+				}
+				redirectURL := fmt.Sprintf("%s%spayment=success&inv_id=%d", pmt.ReturnURL, sep, invID)
 
-			log.Printf("SuccessURL: redirecting inv_id=%d to %s", invID, redirectURL)
-			http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+				log.Printf("SuccessURL: redirecting inv_id=%d to %s", invID, redirectURL)
+				http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+				return
+			}
+			// Нет return_url — показываем success с корректным InvID.
+			h.templates.ExecuteTemplate(w, "success.html", map[string]any{
+				"InvID": invID,
+			})
 			return
 		}
 	}
 
-	// Fallback: показываем страницу успеха
+	// Нет/невалидный cookie: нейтральный экран без подтверждения inv_id.
 	h.templates.ExecuteTemplate(w, "success.html", map[string]any{
-		"InvID": invID,
+		"InvID": 0,
 	})
 }
 
 // FailURL — пользователь отменил оплату.
 // GET /payments/fail
+// MarkFailed — мутация, поэтому обязательно проверяем cookie, иначе любой
+// знающий inv_id мог бы перевести чужой pending-заказ в failed.
 func (h *PaymentHandler) FailURL(w http.ResponseWriter, r *http.Request) {
 	invIDStr := r.FormValue("InvId")
 	invID, _ := strconv.Atoi(invIDStr)
 
 	if invID > 0 {
-		h.payments.MarkFailed(r.Context(), invID)
-
 		pmt, err := h.payments.GetByInvID(r.Context(), invID)
-		if err == nil && pmt.ReturnURL != "" {
-			sep := "?"
-			if strings.Contains(pmt.ReturnURL, "?") {
-				sep = "&"
+		if err == nil && checkOrderAccess(r, invID, pmt.AccessToken) {
+			h.payments.MarkFailed(r.Context(), invID)
+
+			if pmt.ReturnURL != "" {
+				sep := "?"
+				if strings.Contains(pmt.ReturnURL, "?") {
+					sep = "&"
+				}
+				redirectURL := fmt.Sprintf("%s%spayment=failed&inv_id=%d", pmt.ReturnURL, sep, invID)
+				http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+				return
 			}
-			redirectURL := fmt.Sprintf("%s%spayment=failed&inv_id=%d", pmt.ReturnURL, sep, invID)
-			http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+			h.templates.ExecuteTemplate(w, "fail.html", map[string]any{
+				"InvID": invID,
+			})
 			return
 		}
 	}
 
 	h.templates.ExecuteTemplate(w, "fail.html", map[string]any{
-		"InvID": invID,
+		"InvID": 0,
 	})
 }
 
 // CancelOrder — POST /pay/order/{id}/cancel
 // Юзер нажал "Отменить" на странице оплаты. Помечаем платёж failed
 // и редиректим на return_url (= VPN-панель, /pay).
+// Требует валидный access-token в cookie — иначе сторонний пользователь
+// мог бы отменить чужой pending-заказ, зная только inv_id.
 func (h *PaymentHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	invID, err := strconv.Atoi(idStr)
 	if err != nil || invID <= 0 {
 		http.Error(w, "invalid order", http.StatusBadRequest)
+		return
+	}
+
+	existing, err := h.payments.GetByInvID(r.Context(), invID)
+	if err != nil {
+		http.Error(w, "order not found", http.StatusNotFound)
+		return
+	}
+	if !checkOrderAccess(r, invID, existing.AccessToken) {
+		http.Error(w, "order not found", http.StatusNotFound)
 		return
 	}
 

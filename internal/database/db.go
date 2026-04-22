@@ -93,4 +93,9 @@ var migrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_payments_pending_webhook
  	ON payments(paid_at)
  	WHERE status = 'paid' AND callback_url <> '' AND webhook_delivered_at IS NULL`,
+
+	// Токен доступа к странице оплаты (32 случайных байта → base64url, 43 символа).
+	// Передаётся пользователю через httpOnly cookie + query-параметр при первом
+	// заходе. Без токена /pay/order/{id} и callback-ы возвращают 404.
+	`ALTER TABLE payments ADD COLUMN IF NOT EXISTS access_token VARCHAR(64) NOT NULL DEFAULT ''`,
 }

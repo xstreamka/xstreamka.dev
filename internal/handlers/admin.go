@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"pay-service/internal/middleware"
 	"pay-service/internal/models"
 	"pay-service/internal/payment"
 )
@@ -89,6 +90,7 @@ func (h *AdminHandler) Payments(w http.ResponseWriter, r *http.Request) {
 		"TotalPages":  totalPages,
 		"Total":       total,
 		"QueryString": stripPageFromQuery(r.URL.RawQuery),
+		"User":        middleware.UserFromContext(r.Context()),
 	}
 
 	if err := h.templates.ExecuteTemplate(w, "admin_payments.html", data); err != nil {
@@ -126,6 +128,7 @@ func (h *AdminHandler) PaymentDetail(w http.ResponseWriter, r *http.Request) {
 		"MetaPretty":   metaPretty,
 		"Flash":        r.URL.Query().Get("flash"),
 		"RobokassaURL": robokassaLKURL(p.InvID),
+		"User":         middleware.UserFromContext(r.Context()),
 	}
 
 	if err := h.templates.ExecuteTemplate(w, "admin_payment_detail.html", data); err != nil {
