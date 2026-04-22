@@ -45,12 +45,25 @@ pre { background:#0f172a; border:1px solid #334155; border-radius:6px; padding:0
 
 .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 @media (max-width:700px) { .grid-2 { grid-template-columns:1fr; } dl { grid-template-columns:1fr; } }
+
+.topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem; gap:1rem; flex-wrap:wrap; }
+.topbar .user { color:#64748b; font-family:'SF Mono',Menlo,Consolas,monospace; font-size:0.78rem; }
+.logout-btn { background:transparent; border:1px solid #334155; color:#94a3b8; padding:0.35rem 0.7rem; border-radius:6px; font-size:0.78rem; font-family:'SF Mono',Menlo,Consolas,monospace; cursor:pointer; }
+.logout-btn:hover { color:#fca5a5; border-color:#7f1d1d; background:#2a0f0f; }
 </style>
 </head>
 <body>
 <div class="container">
 
-<a href="/admin/payments" class="back">← к списку</a>
+<div class="topbar">
+  <a href="/admin/payments" class="back" style="margin-bottom:0;">← к списку</a>
+  <div style="display:flex; gap:0.5rem; align-items:center;">
+    <span class="user">{{if .User}}@ {{.User}}{{end}}</span>
+    <form method="POST" action="/admin/logout" style="display:inline;">
+      <button type="submit" class="logout-btn">выйти</button>
+    </form>
+  </div>
+</div>
 
 <!-- Flash -->
 {{if eq .Flash "retry_ok"}}

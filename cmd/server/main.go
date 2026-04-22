@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"pay-service/internal/auth"
 	"pay-service/internal/config"
 	"pay-service/internal/database"
 	"pay-service/internal/handlers"
@@ -65,13 +66,35 @@ func main() {
 
 	// ─── Admin UI ───
 	adminH := handlers.NewAdminHandler(paymentStore, webhookSender, tmpl)
-	auth := middleware.BasicAuth("pay-service admin", cfg.AdminUser, cfg.AdminPassword)
 
-	mux.Handle("GET /admin/payments", auth(http.HandlerFunc(adminH.Payments)))
-	mux.Handle("GET /admin/payments/{inv_id}", auth(http.HandlerFunc(adminH.PaymentDetail)))
-	mux.Handle("POST /admin/payments/{inv_id}/retry-webhook", auth(http.HandlerFunc(adminH.RetryWebhook)))
+	// Session/auth
+	secureCookie := len(cfg.SiteURL) >= 8 && cfg.SiteURL[:8] == "https://"
+	sessions, err := auth.NewSessionManager(cfg.SessionSecret, secureCookie)
+	if err != nil {
+		log.Fatalf("Session: %v", err)
+	}
+	limiter := auth.NewLoginLimiter(10, 15*time.Minute)
+	pwChecker := auth.PasswordChecker{Hash: cfg.AdminPasswordHash, Plain: cfg.AdminPassword}
+	if cfg.AdminPasswordHash == "" && cfg.AdminPassword != "" {
+		log.Println("WARN: using plaintext ADMIN_PASSWORD — set ADMIN_PASSWORD_HASH (bcrypt) for production")
+	}
+	authH := handlers.NewAuthHandler(sessions, limiter, tmpl, cfg.AdminUser, pwChecker)
+	protect := middleware.RequireSession(sessions, "/admin/login", cfg.SiteURL)
 
-	log.Println("Admin UI enabled at /admin/payments")
+	// Public auth routes
+	mux.HandleFunc("GET /admin/login", authH.LoginPage)
+	mux.HandleFunc("POST /admin/login", authH.LoginSubmit)
+	mux.HandleFunc("POST /admin/logout", authH.Logout)
+	mux.HandleFunc("GET /admin", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/admin/payments", http.StatusSeeOther)
+	})
+
+	// Protected admin routes
+	mux.Handle("GET /admin/payments", protect(http.HandlerFunc(adminH.Payments)))
+	mux.Handle("GET /admin/payments/{inv_id}", protect(http.HandlerFunc(adminH.PaymentDetail)))
+	mux.Handle("POST /admin/payments/{inv_id}/retry-webhook", protect(http.HandlerFunc(adminH.RetryWebhook)))
+
+	log.Println("Admin UI enabled at /admin/payments (login: /admin/login)")
 
 	// Checkout — принимает подписанные параметры, создаёт платёж, редирект
 	mux.HandleFunc("GET /pay/checkout", h.Checkout)

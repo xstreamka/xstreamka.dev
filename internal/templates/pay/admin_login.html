@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin login — xstreamka.dev</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-deep: #06080d; --bg-primary: #0a0f1a; --bg-card: #0f1624;
+    --bg-card-hover: #141d30; --bg-accent: #1a2540; --border: #1e2a45;
+    --text-primary: #e8ecf4; --text-secondary: #7b8ba8; --text-muted: #4a5a78;
+    --accent-blue: #3b82f6; --accent-cyan: #22d3ee; --accent-green: #10b981;
+    --accent-amber: #f59e0b; --accent-red: #ef4444; --accent-purple: #a78bfa;
+    --gradient-hero: linear-gradient(135deg, #3b82f6 0%, #a78bfa 50%, #22d3ee 100%);
+    --mono: 'JetBrains Mono', monospace; --sans: 'Outfit', sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: var(--sans); background: var(--bg-deep); color: var(--text-primary);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 2rem 1rem; overflow-x: hidden;
+}
+body::before {
+    content: ''; position: fixed; inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 9999;
+}
+.grid-bg {
+    position: fixed; inset: 0;
+    background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px; opacity: 0.15; pointer-events: none;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 70%);
+}
+.glow {
+    position: fixed; width: 700px; height: 700px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, rgba(167, 139, 250, 0.04) 40%, transparent 70%);
+    top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 0;
+}
+.brand {
+    position: absolute; top: 2rem; left: 2.5rem;
+    font-family: var(--mono); font-weight: 700; font-size: 1.2rem;
+    color: var(--accent-cyan); text-decoration: none;
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.brand .cursor { display: inline-block; width: 2px; height: 1.05em; background: var(--accent-cyan); animation: blink 1s step-end infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+.box {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 420px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 2.2rem 2rem 2rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.box::before {
+    content: ''; position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0.6;
+}
+.tag {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--accent-cyan);
+    text-transform: uppercase; letter-spacing: 0.18em;
+    margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.4rem;
+}
+.tag::before { content: '//'; color: var(--text-muted); }
+h1 {
+    font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em;
+    margin-bottom: 0.4rem;
+}
+h1 .gradient {
+    background: var(--gradient-hero); -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; background-clip: text;
+}
+.subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.8rem; }
+
+.field { margin-bottom: 1rem; }
+.field label {
+    display: block; font-family: var(--mono); font-size: 0.72rem;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 0.45rem;
+}
+.field input[type="text"],
+.field input[type="password"] {
+    width: 100%; background: var(--bg-deep); border: 1px solid var(--border);
+    border-radius: 10px; padding: 0.75rem 0.9rem;
+    color: var(--text-primary); font-family: var(--mono); font-size: 0.9rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.field input:focus {
+    outline: none; border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.4rem;
+}
+.remember {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-family: var(--mono); font-size: 0.78rem; color: var(--text-secondary);
+    cursor: pointer; user-select: none;
+}
+.remember input {
+    appearance: none; width: 16px; height: 16px; border: 1px solid var(--border);
+    border-radius: 4px; background: var(--bg-deep); cursor: pointer;
+    position: relative; transition: all 0.15s ease;
+}
+.remember input:checked { background: var(--accent-blue); border-color: var(--accent-blue); }
+.remember input:checked::after {
+    content: ''; position: absolute; left: 4px; top: 1px;
+    width: 5px; height: 9px; border: solid white;
+    border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+.btn {
+    width: 100%; font-family: var(--mono); font-size: 0.88rem; font-weight: 600;
+    padding: 0.85rem 1.2rem; border-radius: 10px; border: none; cursor: pointer;
+    background: var(--accent-blue); color: white;
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+    transition: all 0.2s ease;
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
+.btn:hover { background: #2563eb; box-shadow: 0 6px 30px rgba(59, 130, 246, 0.45); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.error {
+    font-family: var(--mono); font-size: 0.82rem;
+    background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #fca5a5; padding: 0.7rem 0.9rem; border-radius: 8px;
+    margin-bottom: 1.2rem; display: flex; align-items: center; gap: 0.5rem;
+}
+.error::before { content: '!'; font-weight: 700; color: var(--accent-red); }
+
+.foot {
+    margin-top: 1.6rem; padding-top: 1.1rem; border-top: 1px solid var(--border);
+    font-family: var(--mono); font-size: 0.72rem; color: var(--text-muted);
+    text-align: center; letter-spacing: 0.04em;
+}
+.foot a { color: var(--text-secondary); text-decoration: none; }
+.foot a:hover { color: var(--accent-cyan); }
+
+@media (max-width: 480px) {
+    .brand { top: 1.2rem; left: 1.2rem; }
+    .box { padding: 1.8rem 1.4rem 1.6rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="glow"></div>
+
+<a href="/" class="brand">xstreamka<span class="cursor"></span>dev</a>
+
+<form class="box" method="POST" action="/admin/login" autocomplete="on" novalidate>
+    <div class="tag">admin / session</div>
+    <h1><span class="gradient">Вход в админку</span></h1>
+
+    {{if .Error}}
+        <div class="error">{{.Error}}</div>
+    {{end}}
+
+    <div class="field">
+        <label for="username">Логин</label>
+        <input type="text" id="username" name="username" value="{{.User}}"
+               autocomplete="username" autofocus required>
+    </div>
+
+    <div class="field">
+        <label for="password">Пароль</label>
+        <input type="password" id="password" name="password"
+               autocomplete="current-password" required>
+    </div>
+
+    <div class="row">
+        <label class="remember">
+            <input type="checkbox" name="remember" value="1">
+            запомнить на 30 дней
+        </label>
+    </div>
+
+    <input type="hidden" name="next" value="{{.Next}}">
+    <button type="submit" class="btn">&gt; войти</button>
+
+    <div class="foot">
+        <a href="/">← вернуться на сайт</a>
+    </div>
+</form>
+
+</body>
+</html>

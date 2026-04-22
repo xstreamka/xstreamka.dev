@@ -57,12 +57,28 @@ tr:hover td { background:#0f172a; }
 .pager .dots { border:none; background:transparent; }
 
 .empty { text-align:center; padding:3rem 1rem; color:#64748b; }
+
+/* Topbar */
+.topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:1rem; flex-wrap:wrap; }
+.topbar h1 { margin:0; font-size:1.4rem; }
+.topbar .right { display:flex; gap:0.5rem; align-items:center; }
+.topbar .user { color:#64748b; font-family:'SF Mono',Menlo,Consolas,monospace; font-size:0.78rem; }
+.logout-btn { background:transparent; border:1px solid #334155; color:#94a3b8; padding:0.35rem 0.7rem; border-radius:6px; font-size:0.78rem; font-family:'SF Mono',Menlo,Consolas,monospace; cursor:pointer; }
+.logout-btn:hover { color:#fca5a5; border-color:#7f1d1d; background:#2a0f0f; }
 </style>
 </head>
 <body>
 <div class="container">
 
-<h1>💳 Платежи — сверка</h1>
+<div class="topbar">
+  <h1>💳 Платежи — сверка</h1>
+  <div class="right">
+    <span class="user">{{if .User}}@ {{.User}}{{end}}</span>
+    <form method="POST" action="/admin/logout" style="display:inline;">
+      <button type="submit" class="logout-btn">выйти</button>
+    </form>
+  </div>
+</div>
 
 <!-- Stats -->
 <div class="card">
