@@ -40,6 +40,7 @@ services:
       SITE_URL: ${SITE_URL:-https://xstreamka.dev}
       ADMIN_USER: ${ADMIN_USER}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      SESSION_SECRET: ${SESSION_SECRET}
 
 volumes:
   pgdata:
