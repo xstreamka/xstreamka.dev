@@ -174,6 +174,9 @@ func (h *AdminHandler) RetryWebhook(w http.ResponseWriter, r *http.Request) {
 		Email:       p.Email,
 		Metadata:    p.Metadata,
 		PaidAt:      paidAt,
+		// Ручной retry → просим VPN-панель переотправить уведомления, даже если
+		// квитанция там уже сохранена (на штатных ретраях флаг не ставим).
+		ForceNotify: true,
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)

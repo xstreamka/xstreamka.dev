@@ -25,6 +25,12 @@ type WebhookPayload struct {
 	Email       string          `json:"email"`
 	Metadata    json.RawMessage `json:"metadata"`
 	PaidAt      string          `json:"paid_at"`
+	// ForceNotify — выставляется только при ручном «переотправить вебхук» из
+	// админки. Принимающая сторона (VPN-панель) на штатных ретраях видит
+	// идемпотентность и тихо отвечает 200 без писем; этот флаг просит
+	// переотправить уведомления (клиенту/админу) для уже учтённого платежа.
+	// omitempty — чтобы для обычных вебхуков подпись и тело не менялись.
+	ForceNotify bool `json:"force_notify,omitempty"`
 }
 
 // WebhookSender отправляет уведомления на callback_url.
